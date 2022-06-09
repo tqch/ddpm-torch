@@ -1,0 +1,5 @@
+__pycache__
+.idea
+.ipynb_checkpoints
+test
+precomputed_stats
