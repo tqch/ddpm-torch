@@ -1,10 +1,10 @@
 import os, json
 import numpy as np
 import torch
-from torch.optim import Adam
+import torch.nn as nn
+from torch.optim import Adam, lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from torchvision.transforms import GaussianBlur
 from datasets import get_dataloader, DATA_INFO
 from datetime import datetime
 from utils import dict2str, RunningStatistics, save_image, seed_all
@@ -19,6 +19,13 @@ MODEL_LIST = {
 }
 
 
+class DummyScheduler:
+    def init(self): pass
+    def step(self): pass
+    def load_state_dict(self, state_dict): pass
+    def state_dict(self): return None
+
+
 class Trainer:
     def __init__(
             self,
@@ -27,6 +34,8 @@ class Trainer:
             diffusion,
             epochs,
             trainloader,
+            scheduler=DummyScheduler(),
+            grad_norm=1.0,
             shape=None,
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             chkpt_intv=5,  # save a checkpoint every {chkpt_intv} epochs
@@ -42,6 +51,8 @@ class Trainer:
         if shape is None:
             shape = next(iter(trainloader))[0].shape[1:]
         self.shape = shape
+        self.scheduler = scheduler
+        self.grad_norm = grad_norm
         self.device = device
         self.chkpt_intv = chkpt_intv
         self.num_save_images = num_save_images
@@ -62,15 +73,23 @@ class Trainer:
         loss = self.loss(x).mean()
         self.optimizer.zero_grad()
         loss.backward()
+        # gradient clipping by global norm
+        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
         self.optimizer.step()
         self.stats.update(B, loss=loss.item() * B)
 
     def train(self, evaluator=None, chkpt_path=None, image_dir=None):
-        def sample_fn(size):
+
+        def sample_fn(noise):
+            shape = noise.shape
             with torch.no_grad():
-                sample = self.diffusion.p_sample(denoise_fn=self.model, shape=(size,) + self.shape, device=self.device)
+                sample = self.diffusion.p_sample(
+                    denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
             return sample
         image_idx = 0
+        num_samples = self.num_save_images
+        if num_samples:
+            noise = torch.randn((num_samples,) + self.shape)  # fixed x_T for image generation
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
@@ -79,6 +98,7 @@ class Trainer:
                     self.step(x.to(self.device))
                     t.set_postfix(self.current_stats)
                     if i == len(self.trainloader) - 1:
+                        self.model.eval()
                         if evaluator is not None:
                             eval_results = evaluator.eval(sample_fn)
                         else:
@@ -87,21 +107,25 @@ class Trainer:
                         results.update(self.current_stats)
                         results.update(eval_results)
                         t.set_postfix(results)
-            if self.num_save_images and not image_dir:
+            if num_samples and image_dir:
                 with torch.no_grad():
-                    x = sample_fn(self.num_save_images).cpu()
+                    x = sample_fn(noise).cpu()
                     save_image(x, os.path.join(image_dir, f"{image_idx+1}.jpg"))
-            if (e+1) % self.chkpt_intv and not chkpt_path:
-                self.save_checkpoint(chkpt_path, **results)
+                    image_idx += 1
+            # adjust learning rate every epoch before checkpoint
+            scheduler.step()
+            if (e+1) % self.chkpt_intv and chkpt_path:
+                self.save_checkpoint(chkpt_path, epoch=e+1, **results)
 
     @property
     def current_stats(self):
         return self.stats.extract()
 
-    def restart_from_chkpt(self, chkpt_path, device=torch.device("cpu")):
-        chkpt = torch.load(chkpt_path, map_location=device)
+    def restart_from_chkpt(self, chkpt_path):
+        chkpt = torch.load(chkpt_path, map_location=self.device)
         self.model.load_state_dict(chkpt["model"])
         self.optimizer.load_state_dict(chkpt["optimizer"])
+        self.scheduler.load_state_dict(chkpt["scheduler"])
         self.start_epoch = chkpt["epoch"]
 
     def save_checkpoint(self, chkpt_path, **extra_info):
@@ -113,7 +137,7 @@ class Trainer:
         torch.save(dict(chkpt), chkpt_path)
 
     def named_state_dicts(self):
-        for k in ["model", "optimizer"]:
+        for k in ["model", "optimizer", "scheduler"]:
             yield k, getattr(self, k).state_dict()
 
 
@@ -167,12 +191,13 @@ if __name__ == "__main__":
     parser.add_argument("--train-device", default="cuda:0", type=str)
     parser.add_argument("--eval-device", default="cuda:0", type=str)
     parser.add_argument("--latent-dim", default=128, type=int)
-    parser.add_argument("--fig-dir", default="./figs", type=str)
+    parser.add_argument("--image-dir", default="./images", type=str)
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--log-dir", default="./logs", type=str)
     parser.add_argument("--seed", default=1234, type=int)
     parser.add_argument("--restart", action="store_true")
+    parser.add_argument("--eval", action="store_true")
 
     args = parser.parse_args()
 
@@ -198,6 +223,8 @@ if __name__ == "__main__":
     beta1, beta2 = gettr("beta1"), gettr("beta2")
     lr = gettr("lr")
     epochs = gettr("epochs")
+    grad_norm = gettr("grad_norm")
+    warmup = gettr("warmup")
     train_device = gettr("train_device")
     eval_device = gettr("eval_device")
     trainloader = get_dataloader(
@@ -221,6 +248,9 @@ if __name__ == "__main__":
 
     model = MODEL_LIST[args.model](out_channels=out_channels, **configs["denoise"])
     optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
+    # Note1: lr_lambda is used to calculate the **multiplicative factor**
+    # Note2: index starts at 0
+    scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda t: min((t + 1) / warmup, 1.0))
 
     hps = {
         "lr": lr,
@@ -229,14 +259,14 @@ if __name__ == "__main__":
     }
     hps_info = dict2str(hps)
 
-    chkpt_dir = "./chkpts"
+    chkpt_dir = args.chkpt_dir
     if not os.path.exists(chkpt_dir):
         os.makedirs(chkpt_dir)
     chkpt_path = os.path.join(
         chkpt_dir,
         f"{dataset}_diffusion.pt"
     )
-    image_dir = f"./images/{dataset}"
+    image_dir = os.path.join(args.image_dir, f"{dataset}")
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
 
@@ -246,7 +276,15 @@ if __name__ == "__main__":
         diffusion=diffusion,
         epochs=epochs,
         trainloader=trainloader,
+        scheduler=scheduler,
+        grad_norm=grad_norm,
         device=train_device,
     )
-    evaluator = Evaluator(device=eval_device)
+    evaluator = Evaluator(device=eval_device) if args.eval else None
+    if args.restart:
+        try:
+            trainer.restart_from_chkpt(chkpt_path)
+        except FileNotFoundError:
+            print("Checkpoint file does not exist!")
+            print("Starting from scratch...")
     trainer.train(evaluator, chkpt_path=chkpt_path, image_dir=image_dir)

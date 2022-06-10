@@ -1,6 +1,6 @@
 {
   "train": {
-    "lr": 2e-4,
+    "lr": 2e-5,
     "batch_size": 128,
     "grad_norm": 1.0,
     "epochs": 50,
@@ -11,8 +11,8 @@
     "hid_channels": 128,
     "ch_multipliers": [1, 2, 2, 2],
     "num_res_blocks": 2,
-    "apply_attn": [false, true, false, false],
-    "drop_rate": 0.1
+    "apply_attn": [false, false, true, false],
+    "drop_rate": 0.0
   },
   "diffusion": {
     "timesteps": 1000,

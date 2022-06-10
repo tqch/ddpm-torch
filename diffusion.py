@@ -120,8 +120,7 @@ class GaussianDiffusion:
             model_var = torch.exp(model_logvar)
         elif self.model_var_type in ["fixed-small", "fixed-large"]:
             model_var, model_logvar = {
-                "fixed-large": (
-                self.betas, np.log(np.concatenate([np.array([self.posterior_var[1]]), self.betas[1:]]))),
+                "fixed-large": (self.betas, np.log(np.concatenate([np.array([self.posterior_var[1]]), self.betas[1:]]))),
                 "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
             }[self.model_var_type]
             model_var, model_logvar = self._extract(model_var, t, ndim=ndim), self._extract(model_logvar, t, ndim=ndim)
@@ -171,11 +170,14 @@ class GaussianDiffusion:
         sample = model_mean + nonzero_mask * torch.exp(0.5 * model_logvar) * noise
         return (sample, pred_x_0) if return_pred else sample
 
-    def p_sample(self, denoise_fn, shape, device=torch.device("cpu")):
+    def p_sample(self, denoise_fn, shape, device=torch.device("cpu"), noise=None):
         B, *_ = shape
         t = torch.ones(B, dtype=torch.int64)
         t.fill_(self.timesteps - 1)
-        x_t = torch.randn(shape, device=device)
+        if noise is None:
+            x_t = torch.randn(shape, device=device)
+        else:
+            x_t = noise.to(device)
         for _ in range(self.timesteps - 1, -1, -1):
             x_t = self.p_sample_step(denoise_fn, x_t, t)
             t -= 1
