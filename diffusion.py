@@ -183,20 +183,25 @@ class GaussianDiffusion:
             t -= 1
         return x_t
 
-    def p_sample_progressive(self, denoise_fn, shape, pred_freq=50):
+    def p_sample_progressive(self, denoise_fn, shape, device=torch.device("cpu"), noise=None, pred_freq=50):
         B, *_ = shape
         t = torch.ones(B, dtype=torch.int64)
         t.fill_(self.timesteps - 1)
+        if noise is None:
+            x_t = torch.randn(shape, device=device)
+        else:
+            x_t = noise.to(device)
         L = self.timesteps // pred_freq
         preds = torch.zeros((B, L,) + shape[1:], dtype=torch.float32)
         idx = L
-        for i in range(self.timesteps - 1, -1, -1):
-            x_t = self.p_sample_step(denoise_fn, x_t, t)
-            t -= 1
-            if (i + 1) % self.timesteps == 0:
-                idx -= 1
-                preds[:, idx] = x_t
-        return x_t, preds
+        with torch.no_grad():
+            for i in range(self.timesteps - 1, -1, -1):
+                x_t, pred = self.p_sample_step(denoise_fn, x_t, t, return_pred=True)
+                t -= 1
+                if (i + 1) % pred_freq == 0:
+                    idx -= 1
+                    preds[:, idx] = pred.cpu()
+        return x_t.cpu(), preds
 
     # === log likelihood ===
     # bpd: bits per dimension

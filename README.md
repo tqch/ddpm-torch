@@ -14,3 +14,14 @@ Or
 where
 
 ![formula-3](./assets/formula-3.png)
+
+
+## Celeb-A Example
+
+### Samples over training (50 epochs)
+
+![sample-50](./assets/sample-50.gif)
+
+### Predictions along the reverse sample path
+
+![reverse-process](./assets/reverse-process.gif)

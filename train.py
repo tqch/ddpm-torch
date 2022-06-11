@@ -86,7 +86,6 @@ class Trainer:
                 sample = self.diffusion.p_sample(
                     denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
             return sample
-        image_idx = 0
         num_samples = self.num_save_images
         if num_samples:
             noise = torch.randn((num_samples,) + self.shape)  # fixed x_T for image generation
@@ -110,8 +109,7 @@ class Trainer:
             if num_samples and image_dir:
                 with torch.no_grad():
                     x = sample_fn(noise).cpu()
-                    save_image(x, os.path.join(image_dir, f"{image_idx+1}.jpg"))
-                    image_idx += 1
+                    save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
             # adjust learning rate every epoch before checkpoint
             scheduler.step()
             if (e+1) % self.chkpt_intv and chkpt_path:
