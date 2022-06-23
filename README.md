@@ -5,23 +5,33 @@
 
 ### Posterior mean and variance
 
-![formula-1](./assets/formula-1.png)
+- (Predict $x_{t-1}$ from $x_t, x_0$) 
 
-Or
+$$ x_{t-1} \mid x_t, x_0 \sim \text{N}\left(\frac{\sqrt{\alpha_t}(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}x_t+\frac{\sqrt{\alpha_{t-1}}\beta_t}{1-\bar{\alpha}_t}x_0, \sigma_t^2\right) $$
 
-![formula-2](./assets/formula-2.png)
+- (Predict $x_{t-1}$ from $x_t, \epsilon_t$) 
 
-where
 
-![formula-3](./assets/formula-3.png)
+$$ x_{t-1} \mid x_t, x_0 \sim \text{N}\left(\frac{1}{\sqrt{\bar{\alpha}_t}}\left(x_t-\frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\epsilon_t\right), \sigma_t^2\right) $$
 
+where $\sigma_t^2 = \frac{\beta_t(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}$
+
+## Toy Example
+
+### 8 Gaussian
+![8 Gaussian](./assets/gaussian8.gif)
+
+### 25 Gaussian
+![25 Gaussian](./assets/gaussian25.gif)
+
+### Swiss Roll
+![Swiss Roll](./assets/swissroll.gif)
 
 ## Celeb-A Example
 
-### Samples over training (50 epochs)
+### Training samples (50 epochs)
+![sample-50](./assets/celeba-sample-50.gif)
 
-![sample-50](./assets/sample-50.gif)
+### Reverse sampling path
+![reverse-process](./assets/celeba-reverse-process.gif)
 
-### Predictions along the reverse sample path
-
-![reverse-process](./assets/reverse-process.gif)
