@@ -149,7 +149,7 @@ class UNet(nn.Module):
             if self.resample_with_conv:
                 downsample = Sequential(
                     SamePad2d(3, 2),
-                    nn.Conv2d(curr_chans, curr_chans, 3, 2)
+                    Conv2d(curr_chans, curr_chans, 3, 2)
                 )
             else:
                 downsample = nn.AvgPool2d(2)
