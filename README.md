@@ -5,16 +5,16 @@
 
 ### Posterior mean and variance
 
-- (Predict $x_{t-1}$ from $x_t, x_0$) 
+- (Predict $x\_{t-1}$ from $x\_t, x\_0$) 
 
-$$ x_{t-1} \mid x_t, x_0 \sim \text{N}\left(\frac{\sqrt{\alpha_t}(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}x_t+\frac{\sqrt{\alpha_{t-1}}\beta_t}{1-\bar{\alpha}_t}x_0, \sigma_t^2\right) $$
+$$ x\_{t-1} \mid x\_t, x\_0 \sim \text{N}\left(\frac{\sqrt{\alpha\_t}(1-\bar{\alpha}\_{t-1})}{1-\bar{\alpha}\_t}x\_t+\frac{\sqrt{\alpha\_{t-1}}\beta\_t}{1-\bar{\alpha}\_t}x\_0, \sigma\_t^2\right) $$
 
-- (Predict $x_{t-1}$ from $x_t, \epsilon_t$) 
+- (Predict $x\_{t-1}$ from $x\_t, \epsilon\_t$) 
 
 
-$$ x_{t-1} \mid x_t, x_0 \sim \text{N}\left(\frac{1}{\sqrt{\bar{\alpha}_t}}\left(x_t-\frac{\beta_t}{\sqrt{1-\bar{\alpha}_t}}\epsilon_t\right), \sigma_t^2\right) $$
+$$ x\_{t-1} \mid x\_t, x\_0 \sim \text{N}\left(\frac{1}{\sqrt{\bar{\alpha}\_t}}\left(x\_t-\frac{\beta\_t}{\sqrt{1-\bar{\alpha}\_t}}\epsilon\_t\right), \sigma\_t^2\right) $$
 
-where $\sigma_t^2 = \frac{\beta_t(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}$
+where $\sigma\_t^2 = \frac{\beta\_t(1-\bar{\alpha}\_{t-1})}{1-\bar{\alpha}\_t}$
 
 ## Toy Example
 
