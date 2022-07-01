@@ -1,13 +1,10 @@
 import os
 import torch
 import numpy as np
-from toy_model import Decoder
 from torch.optim import Adam, lr_scheduler
-from toy_data import DataStreamer
-from utils import seed_all
-from train_utils import Trainer, Evaluator, DummyScheduler, infer_range
-from diffusion import GaussianDiffusion, get_beta_schedule
-
+from ddpm_torch.utils import seed_all, infer_range
+from ddpm_torch.train_utils import DummyScheduler
+from ddpm_torch.toy import *
 
 if __name__ == "__main__":
     import argparse
@@ -30,11 +27,13 @@ if __name__ == "__main__":
     parser.add_argument("--model-mean-type", choices=["mean", "x_0", "eps"], default="eps", type=str)
     parser.add_argument("--model-var-type", choices=["learned", "fixed-small", "fixed-large"], default="fixed-large", type=str)
     parser.add_argument("--loss-type", choices=["kl", "mse"], default="mse", type=str)
-    parser.add_argument("--fig-dir", default="./figs", type=str)
+    parser.add_argument("--image-dir", default="./images", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
+    parser.add_argument("--chkpt-intv", default=10, type=int)
+    parser.add_argument("--eval-intv", default=1, type=int)
     parser.add_argument("--seed", default=1234, type=int)
     parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--device", default=0, type=int)
+    parser.add_argument("--gpu", default=0, type=int)
     parser.add_argument("--mid-features", default=128, type=int)
     parser.add_argument("--num-temporal-layers", default=1, type=int)
 
@@ -53,7 +52,7 @@ if __name__ == "__main__":
     trainloader = DataStreamer(dataset, batch_size=batch_size, num_batches=num_batches)
 
     # training parameters
-    device = torch.device(f"cuda:{args.device}" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
     epochs = args.epochs
 
     # diffusion parameters
@@ -78,16 +77,16 @@ if __name__ == "__main__":
     beta1, beta2 = args.beta1, args.beta2
     optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
 
-    # checkpoint
+    # checkpoint path
     chkpt_dir = args.chkpt_dir
     if not os.path.exists(chkpt_dir):
         os.makedirs(chkpt_dir)
     chkpt_path = os.path.join(chkpt_dir, f"{dataset}_diffusion.pt")
 
-    # figure
-    fig_dir = os.path.join(args.fig_dir, f"{dataset}")
-    if not os.path.exists(fig_dir):
-        os.makedirs(fig_dir)
+    # set up image directory
+    image_dir = os.path.join(args.image_dir, f"{dataset}")
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
 
     # scheduler
     warmup_epochs = args.lr_warmup
@@ -99,8 +98,8 @@ if __name__ == "__main__":
 
     # load trainer
     grad_norm = 0  # gradient global clipping is disabled
-    eval_intv = 1
-    chkpt_intv = 10
+    eval_intv = args.eval_intv
+    chkpt_intv = args.chkpt_intv
     trainer = Trainer(
         model=model,
         optimizer=optimizer,
@@ -132,4 +131,4 @@ if __name__ == "__main__":
             print("Checkpoint file does not exist!")
             print("Starting from scratch...")
 
-    trainer.train(evaluator, chkpt_path=chkpt_path, image_dir=fig_dir, xlim=xlim, ylim=ylim)
+    trainer.train(evaluator, chkpt_path=chkpt_path, image_dir=image_dir, xlim=xlim, ylim=ylim)

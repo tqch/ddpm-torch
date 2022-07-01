@@ -1,7 +1,7 @@
+import math
 import random
 import torch
 from torchvision.utils import make_grid
-import math
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -22,18 +22,6 @@ def dict2str(d):
         out_str.append(str(v))
     out_str = "_".join(out_str)
     return out_str
-
-
-def restart_from_chkpt(chkpt_path, model, optimizers, device=torch.device("cpu")):
-    chkpt = torch.load(chkpt_path, map_location=device)
-    model.load_state_dict(chkpt["model"])
-    for k in optimizers.keys():
-        optimizers[k].load_state_dict(chkpt[k])
-    fid = chkpt["fid"]
-    return fid, model, optimizers
-
-
-def pair(x): return (x, x)
 
 
 def save_image(x, path, nrow=8, normalize=True, value_range=(-1., 1.)):
@@ -61,6 +49,19 @@ def get_param(name, configs_1, configs_2):
     except KeyError:
         param = get(configs_2, name)
     return param
+
+
+def infer_range(dataset, precision=2):
+    p = precision
+    # infer proper x,y axes limits for evaluation/plotting
+    xlim = np.array([-np.inf, np.inf])
+    ylim = np.array([-np.inf, np.inf])
+    _approx_clip = lambda x, y, z: np.clip([
+        math.floor(p*x), math.ceil(p*y)], *z)
+    for bch in dataset:
+        xlim = _approx_clip(bch[:, 0].min(), bch[:, 0].max(), xlim)
+        ylim = _approx_clip(bch[:, 1].min(), bch[:, 1].max(), ylim)
+    return xlim / p, ylim / p
 
 
 def save_scatterplot(fpath, x, y=None, xlim=None, ylim=None):

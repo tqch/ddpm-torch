@@ -34,4 +34,3 @@ where $\sigma\_t^2 = \frac{\beta\_t(1-\bar{\alpha}\_{t-1})}{1-\bar{\alpha}\_t}$
 
 ### Reverse sampling path
 ![reverse-process](./assets/celeba-reverse-process.gif)
-

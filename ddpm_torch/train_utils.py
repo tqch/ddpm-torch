@@ -1,11 +1,16 @@
 import os
-import math
 import torch
 import torch.nn as nn
-import numpy as np
+from utils import save_image
+from metrics.fid_score import InceptionStatistics, get_precomputed, fid
 from tqdm import tqdm
-from utils import save_scatterplot
-from functions import discrete_klv2d, hist2d
+
+
+class DummyScheduler:
+    def init(self): pass
+    def step(self): pass
+    def load_state_dict(self, state_dict): pass
+    def state_dict(self): return None
 
 
 class RunningStatistics:
@@ -40,11 +45,13 @@ class RunningStatistics:
         return out_str.format(self.count, **self.stats)
 
 
-class DummyScheduler:
-    def init(self): pass
-    def step(self): pass
-    def load_state_dict(self, state_dict): pass
-    def state_dict(self): return None
+def rusume_from_chkpt(chkpt_path, model, optimizers, device=torch.device("cpu")):
+    chkpt = torch.load(chkpt_path, map_location=device)
+    model.load_state_dict(chkpt["model"])
+    for k in optimizers.keys():
+        optimizers[k].load_state_dict(chkpt[k])
+    fid = chkpt["fid"]
+    return fid, model, optimizers
 
 
 class Trainer:
@@ -55,12 +62,12 @@ class Trainer:
             diffusion,
             epochs,
             trainloader,
-            scheduler=DummyScheduler(),
+            scheduler=None,
+            grad_norm=1.0,
             shape=None,
-            grad_norm=0,
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-            eval_intv=1,  # evaluate every {eval_intv} epochs
-            chkpt_intv=10  # save a checkpoint every {chkpt_intv} epochs
+            chkpt_intv=5,  # save a checkpoint every {chkpt_intv} epochs
+            num_save_images=64
     ):
 
         self.model = model
@@ -70,13 +77,13 @@ class Trainer:
         self.start_epoch = 0
         self.trainloader = trainloader
         if shape is None:
-            shape = next(iter(trainloader)).shape[1:]
-        self.shape = tuple(shape)
+            shape = next(iter(trainloader))[0].shape[1:]
+        self.shape = shape
         self.scheduler = scheduler
         self.grad_norm = grad_norm
         self.device = device
-        self.eval_intv = eval_intv
         self.chkpt_intv = chkpt_intv
+        self.num_save_images = num_save_images
 
         model.to(device)
         self.stats = RunningStatistics(loss=None)
@@ -95,45 +102,51 @@ class Trainer:
         self.optimizer.zero_grad()
         loss.backward()
         # gradient clipping by global norm
-        if self.grad_norm:
-            nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
+        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
         self.optimizer.step()
         self.stats.update(B, loss=loss.item() * B)
 
-    def train(self, evaluator=None, chkpt_path=None, image_dir=None, **plot_kwargs):
-        
-        def sample_fn(n):
-            shape = (n, ) + self.shape
+    def train(self, evaluator=None, chkpt_path=None, image_dir=None):
+
+        def sample_fn(noise):
+            shape = noise.shape
             with torch.no_grad():
                 sample = self.diffusion.p_sample(
-                    denoise_fn=self.model, shape=shape, device=self.device, noise=None)
-            return sample.cpu().numpy()
-        
+                    denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
+            return sample
+        num_samples = self.num_save_images
+        if num_samples:
+            noise = torch.randn((num_samples,) + self.shape)  # fixed x_T for image generation
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
             with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs") as t:
-                for i, x in enumerate(t):
+                for i, (x, _) in enumerate(t):
                     self.step(x.to(self.device))
-                    t.set_postfix(self.current_stats) 
+                    t.set_postfix(self.current_stats)
                     if i == len(self.trainloader) - 1:
-                        eval_results = dict()
-                        if (e+1) % self.eval_intv == 0:
-                            self.model.eval()
-                            if evaluator is not None:
-                                eval_results = evaluator.eval(sample_fn)
-                        x_gen = eval_results.pop("x_gen", None)
-                        if x_gen is not None and image_dir:
-                            save_scatterplot(
-                                os.path.join(image_dir, f"{e+1}.jpg"), x_gen, **plot_kwargs)
+                        self.model.eval()
+                        if evaluator is not None:
+                            eval_results = evaluator.eval(sample_fn)
+                        else:
+                            eval_results = dict()
                         results = dict()
                         results.update(self.current_stats)
                         results.update(eval_results)
                         t.set_postfix(results)
+            if num_samples and image_dir:
+                with torch.no_grad():
+                    x = sample_fn(noise).cpu()
+                    save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
             # adjust learning rate every epoch before checkpoint
             self.scheduler.step()
-            if (e+1) % self.chkpt_intv == 0 and chkpt_path:
+            if not (e+1) % self.chkpt_intv and chkpt_path:
                 self.save_checkpoint(chkpt_path, epoch=e+1, **results)
+
+    @property
+    def trainees(self):
+        return ["model", "optimizer"] + [
+            "scheduler", ] if self.scheduler is not None else []
 
     @property
     def current_stats(self):
@@ -143,7 +156,8 @@ class Trainer:
         chkpt = torch.load(chkpt_path, map_location=self.device)
         self.model.load_state_dict(chkpt["model"])
         self.optimizer.load_state_dict(chkpt["optimizer"])
-        self.scheduler.load_state_dict(chkpt["scheduler"])
+        if self.scheduler is not None:
+            self.scheduler.load_state_dict(chkpt["scheduler"])
         self.start_epoch = chkpt["epoch"]
 
     def save_checkpoint(self, chkpt_path, **extra_info):
@@ -155,59 +169,31 @@ class Trainer:
         torch.save(dict(chkpt), chkpt_path)
 
     def named_state_dicts(self):
-        for k in ["model", "optimizer", "scheduler"]:
+        for k in self.trainees:
             yield k, getattr(self, k).state_dict()
 
 
 class Evaluator:
     def __init__(
             self,
-            true_data,
-            eval_batch_size=500,
-            max_eval_count=30000,
-            value_range=(-3, 3),
-            eps=1e-9
+            dataset,
+            eval_batch_size=256,
+            max_eval_count=10000,
+            device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ):
+        # inception stats
+        self.istats = InceptionStatistics(device=device)
         self.eval_batch_size = eval_batch_size
         self.max_eval_count = max_eval_count
-        self.bins = math.floor(math.sqrt(self.max_eval_count//10))
-        self.value_range = value_range
-        self.eps = eps
-        self.true_hist = self.get_histogram(true_data)
-        self.true_hist.setflags(write=False)  # make true_hist read-only
-    
-    def get_histogram(self, data):
-        hist = 0
-        for i in range(0, len(data), self.eval_batch_size):
-            hist += hist2d(
-                data[i:(i+self.eval_batch_size)], bins=self.bins, value_range=self.value_range)
-        hist /= np.sum(hist) + self.eps  # avoid zero-division
-        return hist
-        
+        self.device = device
+        self.target_mean, self.target_var = get_precomputed(dataset)
+
     def eval(self, sample_fn):
-        x_gen = []
-        gen_hist = 0
+        self.istats.reset()
         with torch.no_grad():
             for _ in range(0, self.max_eval_count + self.eval_batch_size, self.eval_batch_size):
                 with torch.no_grad():
-                    x_gen.append(sample_fn(self.eval_batch_size))
-                    gen_hist += hist2d(
-                        x_gen[-1], bins=self.bins, value_range=self.value_range)
-        gen_hist /= np.sum(gen_hist) + self.eps
-        return {
-            "kld": discrete_klv2d(gen_hist, self.true_hist),
-            "x_gen": np.concatenate(x_gen, axis=0)
-        }
-
-
-def infer_range(dataset, precision=2):
-    p = precision
-    # infer proper x,y axes limits for evaluation/plotting
-    xlim = np.array([-np.inf, np.inf])
-    ylim = np.array([-np.inf, np.inf])
-    _approx_clip = lambda x, y, z: np.clip([
-        math.floor(p*x), math.ceil(p*y)], *z)
-    for bch in dataset:
-        xlim = _approx_clip(bch[:, 0].min(), bch[:, 0].max(), xlim)
-        ylim = _approx_clip(bch[:, 1].min(), bch[:, 1].max(), ylim)
-    return xlim / p, ylim / p
+                    x = sample_fn(self.eval_batch_size)
+                self.istats(x.to(self.device))
+        gen_mean, gen_var = self.istats.get_statistics()
+        return {"fid": fid(gen_mean, self.target_mean, gen_var, self.target_var)}

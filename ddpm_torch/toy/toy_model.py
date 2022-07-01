@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from modules import Linear, Sequential
-from functions import get_timestep_embedding
+from ..modules import Linear, Sequential
+from ..functions import get_timestep_embedding
 
 
 DEFAULT_NORMALIZER = nn.LayerNorm

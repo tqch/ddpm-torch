@@ -67,3 +67,4 @@ def hist2d(data, bins, value_range=None):
     x, y = np.split(data, 2, axis=1)
     x, y = x.squeeze(1), y.squeeze(1)
     return np.histogram2d(x, y, bins=bins, range=value_range)[0]
+

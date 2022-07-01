@@ -3,12 +3,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 DEFAULT_DTYPE = torch.float32
 DEFAULT_INITIALIZER = lambda x, scale=1.: nn.init.xavier_uniform_(x, gain=(scale or 1e-10))
 
 
-def pair(x): return (x, x)
+def pair(x):
+    return x, x
 
 
 class Linear(nn.Module):

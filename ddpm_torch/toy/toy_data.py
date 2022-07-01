@@ -1,14 +1,15 @@
 import math
 import numpy as np
 import torch
+from torch.utils.data import Dataset
 from sklearn.datasets import make_swiss_roll
 
 
 __all__ = ["Gaussian8", "Gaussian25", "SwissRoll"]
 
 
-class Dataset:
-    def __init__(self, size, stdev, random_state):
+class ToyDataset(Dataset):
+    def __init__(self, size: int, stdev: float, random_state: int = None):
         self.size = size
         self.noise = stdev
         self.random_state = random_state
@@ -30,7 +31,7 @@ class Dataset:
         return torch.from_numpy(self.data[idx])
 
 
-class Gaussian8(Dataset):
+class Gaussian8(ToyDataset):
     scale = 2
     modes = [
         (math.cos(0.25 * t * math.pi), math.sin(0.25 * t * math.pi))
@@ -55,7 +56,7 @@ class Gaussian8(Dataset):
         return data
 
 
-class Gaussian25(Dataset):
+class Gaussian25(ToyDataset):
     scale = 2
     modes = [(i, j) for i in range(-2, 3) for j in range(-2, 3)]
 
@@ -76,7 +77,7 @@ class Gaussian25(Dataset):
         return data
 
 
-class SwissRoll(Dataset):
+class SwissRoll(ToyDataset):
     """
     source: https://homepages.ecs.vuw.ac.nz/~marslast/Code/Ch6/lle.py
     def swissroll():
@@ -115,7 +116,7 @@ class SwissRoll(Dataset):
 
 class DataStreamer:
 
-    def __init__(self, dataset, batch_size, num_batches):
+    def __init__(self, dataset: ToyDataset, batch_size: int, num_batches: int):
         
         dataset = self.dataset_map(dataset)
         self.batch_size = batch_size

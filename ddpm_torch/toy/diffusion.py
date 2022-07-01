@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from functions import normal_kl, discretized_gaussian_loglik
+from ..functions import normal_kl, discretized_gaussian_loglik
 
 
 def flat_mean(x, start_dim=1):

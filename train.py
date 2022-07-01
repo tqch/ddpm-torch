@@ -2,12 +2,9 @@ import os
 import json
 import torch
 from torch.optim import Adam, lr_scheduler
-from datasets import get_dataloader, DATA_INFO
-from utils import dict2str, seed_all
-from train_utils import Trainer, Evaluator, DummyScheduler
-from diffusion import GaussianDiffusion, get_beta_schedule
-from models import UNet
 import matplotlib as mpl
+from ddpm_torch import *
+
 
 mpl.rcParams["figure.dpi"] = 144
 
@@ -19,7 +16,6 @@ MODEL_LIST = {
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
-    from utils import get_param
     from functools import partial
 
     parser = ArgumentParser()
@@ -43,8 +39,10 @@ if __name__ == "__main__":
     parser.add_argument("--eval-device", default="cuda:0", type=str)
     parser.add_argument("--latent-dim", default=128, type=int)
     parser.add_argument("--image-dir", default="./images", type=str)
+    parser.add_arugment("--num-save-images", default=64, type=int)
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
+    parser.add_argument("--chkpt-intv", default=5, type=int)
     parser.add_argument("--log-dir", default="./logs", type=str)
     parser.add_argument("--seed", default=1234, type=int)
     parser.add_argument("--resume", action="store_true")
@@ -53,14 +51,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     root = os.path.expanduser(args.root)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     dataset = args.dataset
 
     in_channels = DATA_INFO[dataset]["channels"]
     image_res = DATA_INFO[dataset]["resolution"][0]
 
+    # set seed for all rngs
     seed = args.seed
     seed_all(seed)
 
@@ -117,9 +114,15 @@ if __name__ == "__main__":
         chkpt_dir,
         f"{dataset}_diffusion.pt"
     )
+    chkpt_intv = args.chkpt_intv
+    print(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end="")
+    print(f"every {chkpt_intv} epochs")
+
     image_dir = os.path.join(args.image_dir, f"{dataset}")
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
+    num_save_images = args.num_save_images
+    print(f"Generated images (x{num_save_images}) will be saved to {os.path.abspath(image_dir)}")
 
     trainer = Trainer(
         model=model,
@@ -130,6 +133,8 @@ if __name__ == "__main__":
         scheduler=scheduler,
         grad_norm=grad_norm,
         device=train_device,
+        chkpt_intv=chkpt_intv,
+        num_save_images=num_save_images
     )
     evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
     if args.resume:
@@ -138,4 +143,11 @@ if __name__ == "__main__":
         except FileNotFoundError:
             print("Checkpoint file does not exist!")
             print("Starting from scratch...")
+
+    # use cudnn benchmarking algorithm to select the best conv algorithm
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.benchmark = True
+        print(f"cuDNN benchmark: ON")
+
+    print("Training starts...", flush=True)
     trainer.train(evaluator, chkpt_path=chkpt_path, image_dir=image_dir)

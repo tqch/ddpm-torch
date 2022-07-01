@@ -1,8 +1,8 @@
 import math
 import torch
 import torch.nn as nn
-from modules import Linear, Conv2d, SamePad2d, Sequential
-from functions import get_timestep_embedding
+from ..modules import Linear, Conv2d, SamePad2d, Sequential
+from ..functions import get_timestep_embedding
 
 
 DEFAULT_NONLINEARITY = nn.SiLU()  # f(x)=x*sigmoid(x)
@@ -28,15 +28,21 @@ class AttentionBlock(nn.Module):
         self.out_channels = out_channels
         self.skip = nn.Identity() if in_channels == out_channels else Conv2d(in_channels, out_channels, 1)
 
-    def forward(self, x, t_emb=None):
-        skip = self.skip(x)
-        B, C, H, W = x.shape
-        assert C == self.in_channels
-        q, k, v = self.project_in(x).chunk(3, dim=1)
+    @staticmethod
+    def qkv(q, k, v):
+        B, C, H, W = q.shape
         w = torch.einsum("bchw, bcHW -> bhwHW", q, k)
         w = torch.softmax(
-            w.reshape(B, H, W, H * W) / math.sqrt(self.mid_channels), dim=-1).reshape(B, H, W, H, W)
-        x = torch.einsum("bhwHW, bcHW -> bchw", w, v)
+            w.reshape(B, H, W, H * W) / math.sqrt(C), dim=-1).reshape(B, H, W, H, W)
+        out = torch.einsum("bhwHW, bcHW -> bchw", w, v)
+        return out
+
+    def forward(self, x, t_emb=None):
+        skip = self.skip(x)
+        C = x.shape[1]
+        assert C == self.in_channels
+        q, k, v = self.project_in(x).chunk(3, dim=1)
+        x = self.qkv(q, k, v)
         x = self.project_out(x)
         return x + skip
 
