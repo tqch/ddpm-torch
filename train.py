@@ -19,15 +19,15 @@ if __name__ == "__main__":
     from functools import partial
 
     parser = ArgumentParser()
-    parser.add_argument("--model", choices=["unet", ], default="unet")
+    parser.add_argument("--model", choices=["unet", ], default="unet", help="backbone decoder")
     parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba"], default="cifar10")
-    parser.add_argument("--root", default="~/datasets", type=str)
-    parser.add_argument("--epochs", default=50, type=int)
-    parser.add_argument("--lr", default=0.0002, type=float)
-    parser.add_argument("--beta1", default=0.5, type=float)
-    parser.add_argument("--beta2", default=0.999, type=float)
+    parser.add_argument("--root", default="~/datasets", type=str, help="root directory of datasets")
+    parser.add_argument("--epochs", default=50, type=int, help="total number of training epochs")
+    parser.add_argument("--lr", default=0.0002, type=float, help="learning rate")
+    parser.add_argument("--beta1", default=0.5, type=float, help="beta_1 in Adam")
+    parser.add_argument("--beta2", default=0.999, type=float, help="beta_2 in Adam")
     parser.add_argument("--batch-size", default=128, type=int)
-    parser.add_argument("--timesteps", default=1000, type=int)
+    parser.add_argument("--timesteps", default=1000, type=int, help="number of diffusion steps")
     parser.add_argument("--beta-schedule", choices=["quad", "linear", "warmup10", "warmup50", "jsd"], default="linear")
     parser.add_argument("--beta-start", default=0.0001, type=float)
     parser.add_argument("--beta-end", default=0.02, type=float)
@@ -37,16 +37,15 @@ if __name__ == "__main__":
     parser.add_argument("--task", choices=["generation", ], default="generation")
     parser.add_argument("--train-device", default="cuda:0", type=str)
     parser.add_argument("--eval-device", default="cuda:0", type=str)
-    parser.add_argument("--latent-dim", default=128, type=int)
     parser.add_argument("--image-dir", default="./images", type=str)
-    parser.add_arugment("--num-save-images", default=64, type=int)
+    parser.add_argument("--num-save-images", default=64, type=int, help="number of images to generate & save")
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
-    parser.add_argument("--chkpt-intv", default=5, type=int)
+    parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
     parser.add_argument("--log-dir", default="./logs", type=str)
-    parser.add_argument("--seed", default=1234, type=int)
-    parser.add_argument("--resume", action="store_true")
-    parser.add_argument("--eval", action="store_true")
+    parser.add_argument("--seed", default=1234, type=int, help="random seed")
+    parser.add_argument("--resume", action="store_true", help="to resume from a checkpoint")
+    parser.add_argument("--eval", action="store_true", help="whether to evaluate fid during training")
 
     args = parser.parse_args()
 
@@ -115,7 +114,7 @@ if __name__ == "__main__":
         f"{dataset}_diffusion.pt"
     )
     chkpt_intv = args.chkpt_intv
-    print(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end="")
+    print(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
     print(f"every {chkpt_intv} epochs")
 
     image_dir = os.path.join(args.image_dir, f"{dataset}")
