@@ -1,8 +1,8 @@
 import os
 import torch
 import torch.nn as nn
-from utils import save_image
-from metrics.fid_score import InceptionStatistics, get_precomputed, fid
+from .utils import save_image
+from .metrics.fid_score import InceptionStatistics, get_precomputed, fid
 from tqdm import tqdm
 
 

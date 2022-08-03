@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dataset", choices=["gaussian8", "gaussian25", "swissroll"])
+    parser.add_argument("--dataset", choices=["gaussian8", "gaussian25", "swissroll"], default="gaussian8")
     parser.add_argument("--size", default=100000, type=int)
     parser.add_argument("--root", default="~/datasets", type=str, help="root directory of datasets")
     parser.add_argument("--epochs", default=100, type=int, help="total number of training epochs")
