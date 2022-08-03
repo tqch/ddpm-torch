@@ -19,12 +19,13 @@ def get_timestep_embedding(timesteps, embed_dim):
     return embed
 
 
+@torch.jit.script
 def normal_kl(mean1, logvar1, mean2, logvar2):
     diff_logvar = logvar1 - logvar2
-    kl = -1.0 - diff_logvar
-    kl += (mean1 - mean2).pow(2) * torch.exp(-logvar2)
-    kl += torch.exp(diff_logvar)
-    return kl * 0.5
+    kl = (-1.0 - diff_logvar).add(
+        (mean1 - mean2).pow(2) * torch.exp(-logvar2)).add(
+        torch.exp(diff_logvar)).mul(0.5)
+    return kl
 
 
 def approx_std_normal_cdf(x):
@@ -38,10 +39,12 @@ def discretized_gaussian_loglik(x, means, log_scale):
     x_centered = x - means
     inv_stdv = torch.exp(-log_scale)
     upper = inv_stdv * (x_centered + 1./255)
-    cdf_upper = torch.where(x > 0.999, torch.ones(1, dtype=torch.float32), approx_std_normal_cdf(upper))
+    cdf_upper = torch.where(
+        x > 0.999, torch.as_tensor(1, dtype=torch.float32, device=x.device), approx_std_normal_cdf(upper))
     lower = inv_stdv * (x_centered - 1./255)
-    cdf_lower = torch.where(x < -0.999, torch.zeros(1, dtype=torch.float32), approx_std_normal_cdf(lower))
-    log_probs = torch.log(torch.clamp(cdf_upper - cdf_lower - 1e-12, min=0) + 1e-12)
+    cdf_lower = torch.where(
+        x < -0.999, torch.as_tensor(0, dtype=torch.float32, device=x.device), approx_std_normal_cdf(lower))
+    log_probs = torch.log(torch.clamp(cdf_upper - cdf_lower - 1e-12, min=0).add(1e-12))
     return log_probs
 
 

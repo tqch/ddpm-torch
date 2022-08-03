@@ -106,7 +106,7 @@ class GaussianDiffusion:
         posterior_mean_coef2 = self._extract(self.posterior_mean_coef2, t, ndim=ndim).to(x_0.device)
         posterior_mean = posterior_mean_coef1 * x_0 + posterior_mean_coef2 * x_t
         posterior_var = self._extract(self.posterior_var, t, ndim=ndim)
-        posterior_logvar = self._extract(self.posterior_logvar_clipped, t, ndim=ndim)
+        posterior_logvar = self._extract(self.posterior_logvar_clipped, t, ndim=ndim).to(x_0.device)
         return posterior_mean, posterior_var, posterior_logvar
 
     def p_mean_var(self, denoise_fn, x_t, t, clip_denoised, return_pred):
@@ -217,7 +217,7 @@ class GaussianDiffusion:
         kl = flat_mean(kl) / np.log(2.)  # natural base to base 2
         decoder_nll = -discretized_gaussian_loglik(x_0, model_mean, log_scale=0.5 * model_logvar)
         decoder_nll = flat_mean(decoder_nll) / np.log(2.)
-        output = torch.where(t > 0, kl, decoder_nll)
+        output = torch.where(t.to(kl.device) > 0, kl, decoder_nll)
         return (output, pred_x_0) if return_pred else output
 
     def train_losses(self, denoise_fn, x_0, t, noise=None):
