@@ -54,6 +54,14 @@ def discretized_gaussian_loglik(
     return log_probs
 
 
+@torch.jit.script
+def continuous_gaussian_loglik(x, mean, logvar):
+    x_centered = x - mean
+    inv_var = torch.exp(-logvar)
+    log_probs = x_centered.pow(2) * inv_var + math.log(2 * math.pi) + logvar
+    return log_probs.mul(0.5).neg()
+
+
 def discrete_klv2d(hist1, hist2, eps=1e-9):
     """
     compute the discretized (empirical) Kullback-Leibler divergence between P_data1 and P_data2
@@ -76,3 +84,13 @@ def hist2d(data, bins, value_range=None):
     x, y = np.split(data, 2, axis=1)
     x, y = x.squeeze(1), y.squeeze(1)
     return np.histogram2d(x, y, bins=bins, range=value_range)[0]
+
+
+def flat_mean(x, start_dim=1):
+    reduce_dim = [i for i in range(start_dim, x.ndim)]
+    return torch.mean(x, dim=reduce_dim)
+
+
+def flat_sum(x, start_dim=1):
+    reduce_dim = [i for i in range(start_dim, x.ndim)]
+    return torch.sum(x, dim=reduce_dim)

@@ -1,16 +1,6 @@
 import numpy as np
 import torch
-from ..functions import normal_kl, discretized_gaussian_loglik
-
-
-def flat_mean(x, start_dim=1):
-    reduce_dim = [i for i in range(start_dim, x.ndim)]
-    return torch.mean(x, dim=reduce_dim)
-
-
-def flat_sum(x, start_dim=1):
-    reduce_dim = [i for i in range(start_dim, x.ndim)]
-    return torch.sum(x, dim=reduce_dim)
+from ..functions import normal_kl, continuous_gaussian_loglik, flat_mean
 
 
 def _warmup_beta(beta_start, beta_end, num_diffusion_timesteps, warmup_frac):
@@ -216,8 +206,7 @@ class GaussianDiffusion:
             denoise_fn, x_t=x_t, t=t, clip_denoised=clip_denoised, return_pred=True)
         kl = normal_kl(true_mean, true_logvar, model_mean, model_logvar)
         kl = flat_mean(kl) / np.log(2.)  # natural base to base 2
-        decoder_nll = -discretized_gaussian_loglik(
-            x_0, model_mean, log_scale=0.5 * model_logvar, cutoff=self.cutoff)
+        decoder_nll = continuous_gaussian_loglik(x_0, model_mean, logvar=model_logvar).neg()
         decoder_nll = flat_mean(decoder_nll) / np.log(2.)
         output = torch.where(t.to(kl.device) > 0, kl, decoder_nll)
         return (output, pred_x_0) if return_pred else output

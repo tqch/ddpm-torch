@@ -1,16 +1,6 @@
 import numpy as np
 import torch
-from .functions import normal_kl, discretized_gaussian_loglik
-
-
-def flat_mean(x, start_dim=1):
-    reduce_dim = [i for i in range(start_dim, x.ndim)]
-    return torch.mean(x, dim=reduce_dim)
-
-
-def flat_sum(x, start_dim=1):
-    reduce_dim = [i for i in range(start_dim, x.ndim)]
-    return torch.sum(x, dim=reduce_dim)
+from .functions import normal_kl, discretized_gaussian_loglik, flat_mean
 
 
 def _warmup_beta(beta_start, beta_end, num_diffusion_timesteps, warmup_frac):

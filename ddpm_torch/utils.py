@@ -5,6 +5,7 @@ from torchvision.utils import make_grid
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import weakref
 
 mpl.rcParams["figure.dpi"] = 144
 
@@ -85,3 +86,56 @@ def split_squeeze(data):
     x, y = np.split(data, 2, axis=1)
     x, y = x.squeeze(1), y.squeeze(1)
     return x, y
+
+
+class EMA:
+    """
+    exponential moving average
+    inspired by:
+    [1] https://github.com/fadel/pytorch_ema
+    [2] https://github.com/tensorflow/tensorflow/blob/v2.9.1/tensorflow/python/training/moving_averages.py#L281-L685
+    """
+
+    def __init__(self, model, decay=0.9999):
+        shadow = []
+        refs = []
+        for k, v in model.named_parameters():
+            if v.requires_grad:
+                shadow.append((k, v.detach().clone()))
+                refs.append((k, weakref.ref(v)))
+        self.shadow = dict(shadow)
+        self._refs = dict(refs)
+        self.decay = decay
+        self.num_updates = 0
+        self.backup = None
+
+    def update(self):
+        self.num_updates += 1
+        decay = min(self.decay, (1 + self.num_updates) / (10 + self.num_updates))
+        for k, _ref in self._refs.items():
+            assert _ref() is not None, "referenced object no longer exists!"
+            self.shadow[k] += (1 - decay) * (_ref().data - self.shadow[k])
+
+    def apply(self):
+        self.backup = dict([
+            (k, _ref().detach().clone()) for k, _ref in self._refs.items()])
+        for k, _ref in self._refs.items():
+            _ref().data.copy_(self.shadow[k])
+
+    def restore(self):
+        for k, _ref in self._refs.items():
+            _ref().data.copy_(self.backup[k])
+        self.backup = None
+
+    def __enter__(self):
+        self.apply()
+
+    def __exit__(self, *exc):
+        self.restore()
+
+    def state_dict(self):
+        return {
+            "decay": self.decay,
+            "shadow": self.shadow,
+            "num_updates": self.num_updates
+        }

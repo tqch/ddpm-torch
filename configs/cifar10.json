@@ -4,7 +4,7 @@
     "batch_size": 128,
     "grad_norm": 1.0,
     "epochs": 50,
-    "warmup": 15
+    "warmup": 5000
   },
   "denoise": {
     "in_channels": 3,

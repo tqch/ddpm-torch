@@ -1,9 +1,10 @@
 import os
 import torch
 import torch.nn as nn
-from .utils import save_image
+from .utils import save_image, EMA
 from .metrics.fid_score import InceptionStatistics, get_precomputed, fid
 from tqdm import tqdm
+from contextlib import nullcontext
 
 
 class DummyScheduler:
@@ -63,13 +64,15 @@ class Trainer:
             epochs,
             trainloader,
             scheduler=None,
+            use_ema=False,
             grad_norm=1.0,
             shape=None,
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             chkpt_intv=5,  # save a checkpoint every {chkpt_intv} epochs
-            num_save_images=64
+            num_save_images=64,
+            ema_decay=0.9999
     ):
-
+        model.to(device)
         self.model = model
         self.optimizer = optimizer
         self.diffusion = diffusion
@@ -80,12 +83,16 @@ class Trainer:
             shape = next(iter(trainloader))[0].shape[1:]
         self.shape = shape
         self.scheduler = scheduler
+        self.use_ema = use_ema
+        if use_ema:
+            self.ema = EMA(self.model, decay=ema_decay)
+        else:
+            self.ema = nullcontext()
         self.grad_norm = grad_norm
         self.device = device
         self.chkpt_intv = chkpt_intv
         self.num_save_images = num_save_images
 
-        model.to(device)
         self.stats = RunningStatistics(loss=None)
 
     def loss(self, x):
@@ -99,20 +106,25 @@ class Trainer:
     def step(self, x):
         B = x.shape[0]
         loss = self.loss(x).mean()
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         # gradient clipping by global norm
         nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
         self.optimizer.step()
+        # adjust learning rate every step (warming up)
+        self.scheduler.step()
+        if self.use_ema:
+            self.ema.update()
         self.stats.update(B, loss=loss.item() * B)
 
     def train(self, evaluator=None, chkpt_path=None, image_dir=None):
 
         def sample_fn(noise):
             shape = noise.shape
-            with torch.no_grad():
-                sample = self.diffusion.p_sample(
-                    denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
+            with torch.inference_mode():
+                with self.ema:
+                    sample = self.diffusion.p_sample(
+                        denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
             return sample
         num_samples = self.num_save_images
         if num_samples:
@@ -138,15 +150,17 @@ class Trainer:
                 with torch.no_grad():
                     x = sample_fn(noise).cpu()
                     save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
-            # adjust learning rate every epoch before checkpoint
-            self.scheduler.step()
             if not (e+1) % self.chkpt_intv and chkpt_path:
                 self.save_checkpoint(chkpt_path, epoch=e+1, **results)
 
     @property
     def trainees(self):
-        return ["model", "optimizer"] + [
-            "scheduler", ] if self.scheduler is not None else []
+        roster = ["model", "optimizer"]
+        if self.use_ema:
+            roster.append("ema")
+        if self.scheduler is not None:
+            roster.append("scheduler")
+        return roster
 
     @property
     def current_stats(self):
@@ -154,10 +168,8 @@ class Trainer:
 
     def resume_from_chkpt(self, chkpt_path):
         chkpt = torch.load(chkpt_path, map_location=self.device)
-        self.model.load_state_dict(chkpt["model"])
-        self.optimizer.load_state_dict(chkpt["optimizer"])
-        if self.scheduler is not None:
-            self.scheduler.load_state_dict(chkpt["scheduler"])
+        for trainee in self.trainees:
+            getattr(self, trainee).load_state_dict(chkpt[trainee])
         self.start_epoch = chkpt["epoch"]
 
     def save_checkpoint(self, chkpt_path, **extra_info):

@@ -46,6 +46,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument("--resume", action="store_true", help="to resume from a checkpoint")
     parser.add_argument("--eval", action="store_true", help="whether to evaluate fid during training")
+    parser.add_argument("--use-ema", action="store_true", help="whether to use exponential moving average")
+    parser.add_argument("--ema-decay", default=0.9999, type=float, help="decay factor of ema")
 
     args = parser.parse_args()
 
@@ -130,10 +132,12 @@ if __name__ == "__main__":
         epochs=epochs,
         trainloader=trainloader,
         scheduler=scheduler,
+        use_ema=args.use_ema,
         grad_norm=grad_norm,
         device=train_device,
         chkpt_intv=chkpt_intv,
-        num_save_images=num_save_images
+        num_save_images=num_save_images,
+        ema_decay=args.ema_decay
     )
     evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
     if args.resume:
