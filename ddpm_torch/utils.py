@@ -139,3 +139,6 @@ class EMA:
             "shadow": self.shadow,
             "num_updates": self.num_updates
         }
+
+    def load_state_dict(self, state_dict):
+        self.__dict__.update(state_dict)
