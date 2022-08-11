@@ -97,6 +97,7 @@ class SwissRoll(ToyDataset):
 
     def __init__(self, size, stdev=0.25, random_state=1234):
         super(SwissRoll, self).__init__(size, stdev, random_state)
+        self.data = self._sample()
 
     def _calc_stdev(self):
         # calculate the stdev's for the data
@@ -116,11 +117,12 @@ class SwissRoll(ToyDataset):
 
 class DataStreamer:
 
-    def __init__(self, dataset: ToyDataset, batch_size: int, num_batches: int):
+    def __init__(self, dataset: ToyDataset, batch_size: int, num_batches: int, resample: bool = False):
         
         dataset = self.dataset_map(dataset)
         self.batch_size = batch_size
         self.num_batches = num_batches
+        self.resample = resample
         self.dataset = dataset(batch_size * num_batches, random_state=None)
 
     def __iter__(self):
@@ -132,8 +134,9 @@ class DataStreamer:
             cnt += 1
             if cnt >= self.num_batches:
                 break
-        self.dataset.resample()
-        
+        if self.resample:
+            self.dataset.resample()
+
     def __len__(self):
         return self.num_batches
         

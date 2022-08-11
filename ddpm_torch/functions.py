@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn.functional as F
 import numpy as np
+from typing import Union, Tuple
 
 
 DEFAULT_DTYPE = torch.float32
@@ -34,17 +35,22 @@ def approx_std_normal_cdf(x):
     return 0.5 * (1. + torch.tanh(math.sqrt(2. / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
 
-def discretized_gaussian_loglik(x, means, log_scale):
+@torch.jit.script
+def discretized_gaussian_loglik(
+        x, means, log_scale, precision: float = 1./255,
+        cutoff: Union[float, Tuple[float, float]] = (-0.999, 0.999), tol: float = 1e-12):
+    if isinstance(cutoff, float):
+        cutoff = (-cutoff, cutoff)
     # Assumes data is integers [0, 255] rescaled to [-1, 1]
     x_centered = x - means
     inv_stdv = torch.exp(-log_scale)
-    upper = inv_stdv * (x_centered + 1./255)
+    upper = inv_stdv * (x_centered + precision)
     cdf_upper = torch.where(
-        x > 0.999, torch.as_tensor(1, dtype=torch.float32, device=x.device), approx_std_normal_cdf(upper))
-    lower = inv_stdv * (x_centered - 1./255)
+        x > cutoff[1], torch.as_tensor(1, dtype=torch.float32, device=x.device), approx_std_normal_cdf(upper))
+    lower = inv_stdv * (x_centered - precision)
     cdf_lower = torch.where(
-        x < -0.999, torch.as_tensor(0, dtype=torch.float32, device=x.device), approx_std_normal_cdf(lower))
-    log_probs = torch.log(torch.clamp(cdf_upper - cdf_lower - 1e-12, min=0).add(1e-12))
+        x < cutoff[0], torch.as_tensor(0, dtype=torch.float32, device=x.device), approx_std_normal_cdf(lower))
+    log_probs = torch.log(torch.clamp(cdf_upper - cdf_lower - tol, min=0).add(tol))
     return log_probs
 
 
@@ -70,4 +76,3 @@ def hist2d(data, bins, value_range=None):
     x, y = np.split(data, 2, axis=1)
     x, y = x.squeeze(1), y.squeeze(1)
     return np.histogram2d(x, y, bins=bins, range=value_range)[0]
-

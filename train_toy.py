@@ -20,10 +20,10 @@ if __name__ == "__main__":
     parser.add_argument("--beta2", default=0.999, type=float, help="beta_2 in Adam")
     parser.add_argument("--lr-warmup", default=0, type=int, help="number of warming-up epochs")
     parser.add_argument("--batch-size", default=1000, type=int)
-    parser.add_argument("--timesteps", default=1000, type=int, help="number of diffusion steps")
+    parser.add_argument("--timesteps", default=100, type=int, help="number of diffusion steps")
     parser.add_argument("--beta-schedule", choices=["quad", "linear", "warmup10", "warmup50", "jsd"], default="linear")
-    parser.add_argument("--beta-start", default=0.0001, type=float)
-    parser.add_argument("--beta-end", default=0.02, type=float)
+    parser.add_argument("--beta-start", default=0.001, type=float)
+    parser.add_argument("--beta-end", default=0.2, type=float)
     parser.add_argument("--model-mean-type", choices=["mean", "x_0", "eps"], default="eps", type=str)
     parser.add_argument("--model-var-type", choices=["learned", "fixed-small", "fixed-large"], default="fixed-large", type=str)
     parser.add_argument("--loss-type", choices=["kl", "mse"], default="mse", type=str)
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("--resume", action="store_true", help="to resume from a checkpoint")
     parser.add_argument("--gpu", default=0, type=int)
     parser.add_argument("--mid-features", default=128, type=int)
-    parser.add_argument("--num-temporal-layers", default=1, type=int)
+    parser.add_argument("--num-temporal-layers", default=3, type=int)
 
     args = parser.parse_args()
 
@@ -50,6 +50,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     num_batches = data_size // batch_size
     trainloader = DataStreamer(dataset, batch_size=batch_size, num_batches=num_batches)
+    cutoff = {"gaussian8": 1.44, "gaussian25": 1.45, "swissroll": (-1.7, 2.2)}[dataset]
 
     # training parameters
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
@@ -65,7 +66,7 @@ if __name__ == "__main__":
     model_var_type = args.model_var_type
     loss_type = args.loss_type
     diffusion = GaussianDiffusion(
-        betas=betas, model_mean_type=model_mean_type, model_var_type=model_var_type, loss_type=loss_type)
+        betas=betas, model_mean_type=model_mean_type, model_var_type=model_var_type, loss_type=loss_type, cutoff=cutoff)
 
     # model parameters
     out_features = 2 * in_features if model_var_type == "learned" else in_features

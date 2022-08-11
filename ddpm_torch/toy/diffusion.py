@@ -45,7 +45,8 @@ class GaussianDiffusion:
             betas,
             model_mean_type,
             model_var_type,
-            loss_type
+            loss_type,
+            cutoff
     ):
         assert isinstance(betas, np.ndarray) and betas.dtype == np.float64
         assert (betas > 0).all() and (betas <= 1).all()
@@ -53,9 +54,9 @@ class GaussianDiffusion:
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
         self.loss_type = loss_type
+        self.cutoff = cutoff
 
-        timesteps = len(betas)
-        self.timesteps = timesteps
+        self.timesteps = len(betas)
 
         alphas = 1 - betas
         self.alphas_bar = np.cumprod(alphas)
@@ -215,7 +216,8 @@ class GaussianDiffusion:
             denoise_fn, x_t=x_t, t=t, clip_denoised=clip_denoised, return_pred=True)
         kl = normal_kl(true_mean, true_logvar, model_mean, model_logvar)
         kl = flat_mean(kl) / np.log(2.)  # natural base to base 2
-        decoder_nll = -discretized_gaussian_loglik(x_0, model_mean, log_scale=0.5 * model_logvar)
+        decoder_nll = -discretized_gaussian_loglik(
+            x_0, model_mean, log_scale=0.5 * model_logvar, cutoff=self.cutoff)
         decoder_nll = flat_mean(decoder_nll) / np.log(2.)
         output = torch.where(t.to(kl.device) > 0, kl, decoder_nll)
         return (output, pred_x_0) if return_pred else output
@@ -229,7 +231,8 @@ class GaussianDiffusion:
         # kl: weighted
         # mse: unweighted
         if self.loss_type == "kl":
-            losses = self._loss_term_bpd(denoise_fn, x_0=x_0, x_t=x_t, t=t, clip_denoised=False, return_pred=False)
+            losses = self._loss_term_bpd(
+                denoise_fn, x_0=x_0, x_t=x_t, t=t, clip_denoised=False, return_pred=False)
         elif self.loss_type == "mse":
             assert self.model_var_type != "learned"
             if self.model_mean_type == "mean":
