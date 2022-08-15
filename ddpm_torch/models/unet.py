@@ -97,7 +97,7 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
         self.in_channels = in_channels
         self.hid_channels = hid_channels
-        self.out_channels = out_channels,
+        self.out_channels = out_channels
         self.time_embedding_dim = time_embedding_dim or 4 * self.hid_channels
         levels = len(ch_multipliers)
         self.ch_multipliers = ch_multipliers

@@ -173,7 +173,8 @@ class GaussianDiffusion:
             t -= 1
         return x_t
 
-    def p_sample_progressive(self, denoise_fn, shape, device=torch.device("cpu"), noise=None, pred_freq=50):
+    def p_sample_progressive(
+            self, denoise_fn, shape, device=torch.device("cpu"), noise=None, pred_freq=50):
         B, *_ = shape
         t = torch.ones(B, dtype=torch.int64)
         t.fill_(self.timesteps - 1)
@@ -219,7 +220,8 @@ class GaussianDiffusion:
         # kl: weighted
         # mse: unweighted
         if self.loss_type == "kl":
-            losses = self._loss_term_bpd(denoise_fn, x_0=x_0, x_t=x_t, t=t, clip_denoised=False, return_pred=False)
+            losses = self._loss_term_bpd(
+                denoise_fn, x_0=x_0, x_t=x_t, t=t, clip_denoised=False, return_pred=False)
         elif self.loss_type == "mse":
             assert self.model_var_type != "learned"
             if self.model_mean_type == "mean":
@@ -239,7 +241,8 @@ class GaussianDiffusion:
 
     def _prior_bpd(self, x_0):
         B, T = len(x_0), self.timesteps
-        T_mean, _, T_logvar = self.q_mean_var(x_0=x_0, t=(T - 1) * torch.ones([B, ], dtype=torch.int64))
+        T_mean, _, T_logvar = self.q_mean_var(
+            x_0=x_0, t=(T - 1) * torch.ones([B, ], dtype=torch.int64))
         kl_prior = normal_kl(T_mean, T_logvar, mean2=0., logvar2=0.)
         return flat_mean(kl_prior) / np.log(2.)
 

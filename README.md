@@ -3,12 +3,18 @@
 ## Code usage
 ### Toy data
 ```shell
-usage: train_toy.py [-h] [--dataset {gaussian8,gaussian25,swissroll}] [--size SIZE] [--root ROOT] [--epochs EPOCHS] [--lr LR]
-                    [--beta1 BETA1] [--beta2 BETA2] [--lr-warmup LR_WARMUP] [--batch-size BATCH_SIZE] [--timesteps TIMESTEPS]
-                    [--beta-schedule {quad,linear,warmup10,warmup50,jsd}] [--beta-start BETA_START] [--beta-end BETA_END]
-                    [--model-mean-type {mean,x_0,eps}] [--model-var-type {learned,fixed-small,fixed-large}]
-                    [--loss-type {kl,mse}] [--image-dir IMAGE_DIR] [--chkpt-dir CHKPT_DIR] [--chkpt-intv CHKPT_INTV]
-                    [--eval-intv EVAL_INTV] [--seed SEED] [--resume] [--gpu GPU] [--mid-features MID_FEATURES]
+usage: train_toy.py [-h] [--dataset {gaussian8,gaussian25,swissroll}]
+                    [--size SIZE] [--root ROOT] [--epochs EPOCHS] [--lr LR]
+                    [--beta1 BETA1] [--beta2 BETA2] [--lr-warmup LR_WARMUP]
+                    [--batch-size BATCH_SIZE] [--timesteps TIMESTEPS]
+                    [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]
+                    [--beta-start BETA_START] [--beta-end BETA_END]
+                    [--model-mean-type {mean,x_0,eps}]
+                    [--model-var-type {learned,fixed-small,fixed-large}]
+                    [--loss-type {kl,mse}] [--image-dir IMAGE_DIR]
+                    [--chkpt-dir CHKPT_DIR] [--chkpt-intv CHKPT_INTV]
+                    [--eval-intv EVAL_INTV] [--seed SEED] [--resume]
+                    [--gpu GPU] [--mid-features MID_FEATURES]
                     [--num-temporal-layers NUM_TEMPORAL_LAYERS]
 
 optional arguments:
@@ -45,13 +51,20 @@ optional arguments:
 ### Real-world data
 
 ```shell
-usage: train.py [-h] [--model {unet}] [--dataset {mnist,cifar10,celeba}] [--root ROOT] [--epochs EPOCHS] [--lr LR]
-                [--beta1 BETA1] [--beta2 BETA2] [--batch-size BATCH_SIZE] [--timesteps TIMESTEPS]
-                [--beta-schedule {quad,linear,warmup10,warmup50,jsd}] [--beta-start BETA_START] [--beta-end BETA_END]
-                [--model-mean-type {mean,x_0,eps}] [--model-var-type {learned,fixed-small,fixed-large}] [--loss-type {kl,mse}]
-                [--task {generation}] [--train-device TRAIN_DEVICE] [--eval-device EVAL_DEVICE] [--image-dir IMAGE_DIR]
-                [--num-save-images NUM_SAVE_IMAGES] [--config-dir CONFIG_DIR] [--chkpt-dir CHKPT_DIR] [--chkpt-intv CHKPT_INTV]
-                [--log-dir LOG_DIR] [--seed SEED] [--resume] [--eval]
+usage: train.py [-h] [--model {unet}] [--dataset {mnist,cifar10,celeba}]
+                [--root ROOT] [--epochs EPOCHS] [--lr LR] [--beta1 BETA1]
+                [--beta2 BETA2] [--batch-size BATCH_SIZE]
+                [--timesteps TIMESTEPS]
+                [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]
+                [--beta-start BETA_START] [--beta-end BETA_END]
+                [--model-mean-type {mean,x_0,eps}]
+                [--model-var-type {learned,fixed-small,fixed-large}]
+                [--loss-type {kl,mse}] [--task {generation}]
+                [--train-device TRAIN_DEVICE] [--eval-device EVAL_DEVICE]
+                [--image-dir IMAGE_DIR] [--num-save-images NUM_SAVE_IMAGES]
+                [--config-dir CONFIG_DIR] [--chkpt-dir CHKPT_DIR]
+                [--chkpt-intv CHKPT_INTV] [--log-dir LOG_DIR] [--seed SEED]
+                [--resume] [--eval] [--use-ema] [--ema-decay EMA_DECAY]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -85,6 +98,9 @@ optional arguments:
   --seed SEED           random seed
   --resume              to resume from a checkpoint
   --eval                whether to evaluate fid during training
+  --use-ema             whether to use exponential moving average
+  --ema-decay EMA_DECAY
+                        decay factor of ema
 ```
 
 ### Examples
@@ -101,21 +117,21 @@ python train.py --dataset cifar10 --gpu 0 --epochs 50
 ### Toy data
 
 #### 8 Gaussian
-![8 Gaussian](./assets/gaussian8.gif)
+<p align="center"> <img alt="gaussian8" src="./assets/gaussian8.gif" /> </p>
 
 #### 25 Gaussian
-![25 Gaussian](./assets/gaussian25.gif)
+<p align="center"> <img alt="gaussian25" src="./assets/gaussian25.gif" /> </p>
 
 #### Swiss Roll
-![Swiss Roll](./assets/swissroll.gif)
+<p align="center"> <img alt="swissroll" src="./assets/swissroll.gif" /> </p>
 
 ### Celeb-A
 
 #### Training samples (50 epochs)
-![sample-50](./assets/celeba-sample-50.gif)
+<p align="center"> <img alt="train_100" src="./assets/train_100.gif" /> </p>
 
-#### Reverse sampling path
-![reverse-process](./assets/celeba-reverse-process.gif)
+#### Denoising process
+<p align="center"> <img alt="denoising_100" src="./assets/denoising_100.gif" /> </p>
 
 ## Reference formulae
 
