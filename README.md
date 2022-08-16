@@ -125,13 +125,23 @@ python train.py --dataset cifar10 --gpu 0 --epochs 50
 #### Swiss Roll
 <p align="center"> <img alt="swissroll" src="./assets/swissroll.gif" /> </p>
 
-### Celeb-A
+### Real-world data
 
-#### Training samples (50 epochs)
-<p align="center"> <img alt="train_100" src="./assets/train_100.gif" /> </p>
+#### CIFAR-10
 
-#### Denoising process
-<p align="center"> <img alt="denoising_100" src="./assets/denoising_100.gif" /> </p>
+##### Training samples (100 epochs)
+<p align="center"> <img alt="cifar10_train_100" src="./assets/cifar10_train_100.gif" /> </p>
+
+##### Denoising process
+<p align="center"> <img alt="cifar10_denoise_100" src="./assets/cifar10_denoise_100.gif" /> </p>
+
+#### Celeb-A
+
+##### Training samples (100 epochs)
+<p align="center"> <img alt="celeba_train_100" src="./assets/celeba_train_100.gif" /> </p>
+
+##### Denoising process
+<p align="center"> <img alt="celeba_denoise_100" src="./assets/celeba_denoise_100.gif" /> </p>
 
 ## Reference formulae
 
