@@ -50,7 +50,6 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     num_batches = data_size // batch_size
     trainloader = DataStreamer(dataset, batch_size=batch_size, num_batches=num_batches)
-    cutoff = {"gaussian8": 1.44, "gaussian25": 1.45, "swissroll": (-1.7, 2.2)}[dataset]
 
     # training parameters
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
@@ -66,7 +65,7 @@ if __name__ == "__main__":
     model_var_type = args.model_var_type
     loss_type = args.loss_type
     diffusion = GaussianDiffusion(
-        betas=betas, model_mean_type=model_mean_type, model_var_type=model_var_type, loss_type=loss_type, cutoff=cutoff)
+        betas=betas, model_mean_type=model_mean_type, model_var_type=model_var_type, loss_type=loss_type)
 
     # model parameters
     out_features = 2 * in_features if model_var_type == "learned" else in_features

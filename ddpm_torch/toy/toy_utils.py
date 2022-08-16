@@ -158,10 +158,9 @@ class Evaluator:
         gen_hist = 0
         with torch.no_grad():
             for _ in range(0, self.max_eval_count + self.eval_batch_size, self.eval_batch_size):
-                with torch.no_grad():
-                    x_gen.append(sample_fn(self.eval_batch_size))
-                    gen_hist += hist2d(
-                        x_gen[-1], bins=self.bins, value_range=self.value_range)
+                x_gen.append(sample_fn(self.eval_batch_size))
+                gen_hist += hist2d(
+                    x_gen[-1], bins=self.bins, value_range=self.value_range)
         gen_hist /= np.sum(gen_hist) + self.eps
         return {
             "kld": discrete_klv2d(gen_hist, self.true_hist),

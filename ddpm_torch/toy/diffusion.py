@@ -35,8 +35,7 @@ class GaussianDiffusion:
             betas,
             model_mean_type,
             model_var_type,
-            loss_type,
-            cutoff
+            loss_type
     ):
         assert isinstance(betas, np.ndarray) and betas.dtype == np.float64
         assert (betas > 0).all() and (betas <= 1).all()
@@ -44,7 +43,6 @@ class GaussianDiffusion:
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
         self.loss_type = loss_type
-        self.cutoff = cutoff
 
         self.timesteps = len(betas)
 
