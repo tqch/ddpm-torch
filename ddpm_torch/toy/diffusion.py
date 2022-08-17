@@ -118,7 +118,7 @@ class GaussianDiffusion:
             raise NotImplementedError(self.model_var_type)
 
         # calculate the mean estimate
-        _clip = lambda x: x  # lambda x: x.clamp(-3., 3.) if clip_denoised else lambda x: x
+        _clip = lambda x: x  # (lambda x: x.clamp(-3., 3.)) if clip_denoised else (lambda x: x)
         if self.model_mean_type == "mean":
             pred_x_0 = _clip(self._pred_x_0_from_mean(x_t=x_t, mean=out, t=t))
             model_mean = out
