@@ -52,7 +52,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     root = os.path.expanduser(args.root)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dataset = args.dataset
 
     in_channels = DATA_INFO[dataset]["channels"]

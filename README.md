@@ -109,7 +109,7 @@ optional arguments:
 python train_toy.py --dataset gaussian8 --gpu 0 --epochs 100
 
 # train a cifar10 model on cuda:0 for a total of 50 epochs
-python train.py --dataset cifar10 --gpu 0 --epochs 50
+python train.py --dataset cifar10 --train-device cuda:0 --epochs 50
 ```
 
 ## Experiment results
