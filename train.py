@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser.add_argument("--root", default="~/datasets", type=str, help="root directory of datasets")
     parser.add_argument("--epochs", default=50, type=int, help="total number of training epochs")
     parser.add_argument("--lr", default=0.0002, type=float, help="learning rate")
-    parser.add_argument("--beta1", default=0.5, type=float, help="beta_1 in Adam")
+    parser.add_argument("--beta1", default=0.9, type=float, help="beta_1 in Adam")
     parser.add_argument("--beta2", default=0.999, type=float, help="beta_2 in Adam")
     parser.add_argument("--batch-size", default=128, type=int)
     parser.add_argument("--timesteps", default=1000, type=int, help="number of diffusion steps")
