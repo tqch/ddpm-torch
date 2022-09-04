@@ -8,15 +8,16 @@ from typing import Union, Tuple
 DEFAULT_DTYPE = torch.float32
 
 
-def get_timestep_embedding(timesteps, embed_dim):
+@torch.jit.script
+def get_timestep_embedding(timesteps, embed_dim: int, dtype: torch.dtype = DEFAULT_DTYPE):
     half_dim = embed_dim // 2
     embed = math.log(10000) / (half_dim - 1)
-    embed = torch.exp(-torch.arange(half_dim, dtype=DEFAULT_DTYPE) * embed)
-    embed = torch.outer(timesteps.to(DEFAULT_DTYPE), embed)
+    embed = torch.exp(-torch.arange(half_dim, dtype=dtype, device=timesteps.device) * embed)
+    embed = torch.outer(timesteps.to(dtype), embed)
     embed = torch.cat([torch.sin(embed), torch.cos(embed)], dim=1)
     if embed_dim % 2 == 1:
         embed = F.pad(embed, [0, 1])  # padding the last dimension
-    assert embed.dtype == DEFAULT_DTYPE
+    assert embed.dtype == dtype
     return embed
 
 

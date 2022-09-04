@@ -49,7 +49,7 @@ class Decoder(nn.Module):
 
     def forward(self, x, t):
         t_emb = get_timestep_embedding(t, self.mid_features)
-        t_emb = self.emb(t_emb.to(x.device))
+        t_emb = self.emb(t_emb)
         out = self.fc_in(x)
         out = self.fc_temp(out, t_emb=t_emb)
         out = self.fc_out(self.bn_out(out))

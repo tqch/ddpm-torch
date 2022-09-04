@@ -162,20 +162,19 @@ class GaussianDiffusion:
 
     def p_sample(self, denoise_fn, shape, device=torch.device("cpu"), noise=None):
         B, *_ = shape
-        t = torch.empty((B, ), dtype=torch.int64)
+        t = torch.empty((B, ), dtype=torch.int64, device=device)
         if noise is None:
             x_t = torch.randn(shape, device=device)
         else:
             x_t = noise.to(device)
-        for ti in range(self.timesteps - 1, 0, -1):
+        for ti in range(self.timesteps - 1, -1, -1):
             t.fill_(ti)
             x_t = self.p_sample_step(denoise_fn, x_t, t)
-        return self.p_sample_step(
-            denoise_fn, x_t, t.zero_(), return_pred=True)[1]
+        return x_t
 
     def p_sample_progressive(self, denoise_fn, shape, device=torch.device("cpu"), noise=None, pred_freq=50):
         B, *_ = shape
-        t = torch.ones(B, dtype=torch.int64)
+        t = torch.empty(B, dtype=torch.int64, device=device)
         t.fill_(self.timesteps - 1)
         if noise is None:
             x_t = torch.randn(shape, device=device)

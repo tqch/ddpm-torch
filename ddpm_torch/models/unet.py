@@ -184,7 +184,7 @@ class UNet(nn.Module):
 
     def forward(self, x, t):
         t_emb = get_timestep_embedding(t, self.hid_channels)
-        t_emb = self.embed(t_emb.to(x.device))
+        t_emb = self.embed(t_emb)
 
         # downsample
         hs = [self.in_conv(x)]

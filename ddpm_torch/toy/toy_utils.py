@@ -47,9 +47,9 @@ class Trainer:
     def loss(self, x):
         B = x.shape[0]
         T = self.diffusion.timesteps
-        t = torch.randint(T - 1, size=(B,), dtype=torch.int64)
+        t = torch.randint(T - 1, size=(B,), dtype=torch.int64, device=self.device)
         loss = self.diffusion.train_losses(self.model, x_0=x, t=t)
-        assert loss.shape == (B,)
+        assert loss.shape == (B, )
         return loss
 
     def step(self, x):
