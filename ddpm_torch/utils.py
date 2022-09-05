@@ -47,7 +47,7 @@ def get_param(name, configs_1, configs_2):
             NotImplementedError("Not supported!")
     try:
         param = get(configs_1, name)
-    except KeyError:
+    except (KeyError, AttributeError):
         param = get(configs_2, name)
     return param
 
