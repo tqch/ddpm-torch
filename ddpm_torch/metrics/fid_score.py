@@ -57,7 +57,8 @@ except ImportError:
 
 from .inception import InceptionV3
 
-import io, requests
+import io
+import requests
 import torch.nn as nn
 from torchvision import transforms
 
@@ -95,24 +96,24 @@ class InceptionStatistics(nn.Module):
         self.model.eval()
         self.model.to(device)
         # initialize statistics
-        self.running_mean = np.zeros((activation_dim, ))
-        self.running_var = np.zeros((activation_dim, activation_dim))
+        self.running_mean = np.zeros((activation_dim, ), dtype=np.float64)
+        self.running_var = np.zeros((activation_dim, activation_dim), dtype=np.float64)
         self.count = 0
 
     def load_model(self):
         block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[self.activation_dim]
-        model = InceptionV3([block_idx], normalize_input=False)
+        model = InceptionV3([block_idx])
         return model
 
     def forward(self, x):
         x = self.input_transform(x)
         with torch.no_grad():
-            act = self.model(x)[0]
+            act = self.model(x)[0].cpu().numpy()
         if act.shape[2] != 1 or act.shape[3] != 1:
             act = adaptive_avg_pool2d(act, (1, 1))
-        act = act.squeeze(-1).squeeze(-1).cpu().numpy()
+        act = act.squeeze(-1).squeeze(-1)
         mean = np.mean(act, axis=0)
-        var = np.cov(act, rowvar=False, bias=True)
+        var = np.cov(act, rowvar=False, ddof=0)
         count = act.shape[0]
         alpha = count / (self.count + count)
         if self.count == 0:
@@ -139,7 +140,8 @@ class InceptionStatistics(nn.Module):
 
 
 PRE_COMPUTED_LIST = {
-    "cropped_celeba": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_celeba.npz",
+    # "cropped_celeba": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_celeba.npz",
+    "cropped_celeba": "https://github.com/tqch/VAEGAN/releases/download/precomputed_statistics_celeba/fid_stats_celeba_148x148.npz",
     "lsun_bedroom": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_lsun_train.npz",
     "cifar10": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_cifar10_train.npz",
     "svhn": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_svhn_train.npz",
@@ -148,7 +150,7 @@ PRE_COMPUTED_LIST = {
 }
 
 
-def get_precomputed(dataset, download_dir="precomputed_stats"):
+def get_precomputed(dataset, download_dir="precomputed"):
     if dataset == "celeba":
         dataset = "cropped_celeba"
     url = PRE_COMPUTED_LIST[dataset]
@@ -174,7 +176,7 @@ def get_precomputed(dataset, download_dir="precomputed_stats"):
     return mean, var
 
 
-def fid(mean1, mean2, var1, var2, eps=1e-6):
+def calc_fd(mean1, var1, mean2, var2, eps=1e-6):
     return calculate_frechet_distance(mean1, var1, mean2, var2, eps)
 
 ###############################################################

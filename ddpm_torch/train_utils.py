@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 from .utils import save_image, EMA
-from .metrics.fid_score import InceptionStatistics, get_precomputed, fid
+from .metrics.fid_score import InceptionStatistics, get_precomputed, calc_fd
 from tqdm import tqdm
 from contextlib import nullcontext
 
@@ -208,4 +208,4 @@ class Evaluator:
                     x = sample_fn(self.eval_batch_size)
                 self.istats(x.to(self.device))
         gen_mean, gen_var = self.istats.get_statistics()
-        return {"fid": fid(gen_mean, self.target_mean, gen_var, self.target_var)}
+        return {"fid": calc_fd(gen_mean, gen_var, self.target_mean, self.target_var)}

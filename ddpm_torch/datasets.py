@@ -102,6 +102,7 @@ DATA_INFO = {
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
             # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         ]),
+        "_transform": transforms.PILToTensor(),
         "train_size": 50000,
         "test_size": 10000
     },
@@ -115,6 +116,11 @@ DATA_INFO = {
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]),
+        "_transform": transforms.Compose([
+            crop_celeba,
+            transforms.Resize((64, 64)),
+            transforms.PILToTensor()
         ]),
         "train": 162770,
         "test": 19962,
