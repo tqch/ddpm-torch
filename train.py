@@ -28,6 +28,7 @@ if __name__ == "__main__":
     parser.add_argument("--model-mean-type", choices=["mean", "x_0", "eps"], default="eps", type=str)
     parser.add_argument("--model-var-type", choices=["learned", "fixed-small", "fixed-large"], default="fixed-large", type=str)
     parser.add_argument("--loss-type", choices=["kl", "mse"], default="mse", type=str)
+    parser.add_argument("--num-workers", default=4, type=int, help="number of workers for data loading")
     parser.add_argument("--train-device", default="cuda:0", type=str)
     parser.add_argument("--eval-device", default="cuda:0", type=str)
     parser.add_argument("--image-dir", default="./images", type=str)
@@ -69,9 +70,11 @@ if __name__ == "__main__":
     eval_device = gettr("eval_device")
 
     split = "all" if dataset == "celeba" else "train"
+    num_workers = args.num_workers
     trainloader = get_dataloader(
-        dataset, batch_size=batch_size, split=split, val_size=0.,
-        random_seed=seed, root=root, drop_last=True, pin_memory=True)  # drop_last to have a static input shape
+        dataset, batch_size=batch_size, split=split, val_size=0., random_seed=seed,
+        root=root, drop_last=True, pin_memory=True, num_workers=num_workers
+    )  # drop_last to have a static input shape; num_workers > 0 to enable asynchronous data loading
 
     # diffusion parameters
     getdif = partial(get_param, configs_1=configs.get("diffusion", {}), configs_2=args)
