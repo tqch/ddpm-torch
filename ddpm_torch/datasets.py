@@ -161,6 +161,7 @@ def get_dataloader(
         random_seed=None,
         root=ROOT,
         pin_memory=False,
+        drop_last=False,
         num_workers=0
 ):
     assert isinstance(val_size, float) and 0 <= val_size < 1
@@ -168,6 +169,7 @@ def get_dataloader(
     dataloader_configs = {
         "batch_size": batch_size,
         "pin_memory": pin_memory,
+        "drop_last": drop_last,
         "num_workers": num_workers
     }
     if dataset == "celeba":

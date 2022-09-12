@@ -53,11 +53,17 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         self.alphas_bar = self.alphas_bar[subsequence]
         self.alphas_bar_prev = np.concatenate([np.ones(1, dtype=np.float64), self.alphas_bar[:-1]])
         self.alphas = self.alphas_bar / self.alphas_bar_prev
-        self.betas = 1 - self.alphas
+        self.betas = 1. - self.alphas
         self.sqrt_alphas_bar_prev = np.sqrt(self.alphas_bar_prev)
-        self.posterior_var = self.betas * (1 - self.alphas_bar_prev) / (1 - self.alphas_bar) * eta2
+
+        # q(x_t|x_0)
+        # re-parameterization: x_t(x_0, \epsilon_t)
+        self.sqrt_alphas_bar = np.sqrt(self.alphas_bar)
+        self.sqrt_one_minus_alphas_bar = np.sqrt(1./self.alphas_bar - 1.)
+
+        self.posterior_var = self.betas * (1. - self.alphas_bar_prev) / (1. - self.alphas_bar) * eta2
         self.posterior_logvar_clipped = np.log(np.concatenate([
-            np.array([self.posterior_var[1], ], dtype=np.float64), self.posterior_var[1:]]))
+            np.array([self.posterior_var[1], ], dtype=np.float64), self.posterior_var[1:]]).clip(min=1e-20))
 
         # coefficients to recover x_0 from x_t and \epsilon_t
         self.sqrt_recip_alphas_bar = np.sqrt(1. / self.alphas_bar)
@@ -66,8 +72,8 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         # coefficients to calculate E[x_{t-1}|x_0, x_t]
         self.posterior_mean_coef2 = np.sqrt(
             1 - self.alphas_bar - eta2 * self.betas
-        ) * np.sqrt(1 - self.alphas_bar_prev) / (1 - self.alphas_bar)
-        self.posterior_mean_coef1 = self.sqrt_alphas_bar_prev * (1 - np.sqrt(self.alphas) * self.posterior_mean_coef2)
+        ) * np.sqrt(1 - self.alphas_bar_prev) / (1. - self.alphas_bar)
+        self.posterior_mean_coef1 = self.sqrt_alphas_bar_prev * (1. - np.sqrt(self.alphas) * self.posterior_mean_coef2)
 
         self.subsequence = torch.as_tensor(subsequence)
 

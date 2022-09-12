@@ -9,17 +9,11 @@ from ddpm_torch import *
 mpl.rcParams["figure.dpi"] = 144
 
 
-MODEL_LIST = {
-    "unet": UNet
-}
-
-
 if __name__ == "__main__":
     from argparse import ArgumentParser
     from functools import partial
 
     parser = ArgumentParser()
-    parser.add_argument("--model", choices=["unet", ], default="unet", help="backbone decoder")
     parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba"], default="cifar10")
     parser.add_argument("--root", default="~/datasets", type=str, help="root directory of datasets")
     parser.add_argument("--epochs", default=50, type=int, help="total number of training epochs")
@@ -34,7 +28,6 @@ if __name__ == "__main__":
     parser.add_argument("--model-mean-type", choices=["mean", "x_0", "eps"], default="eps", type=str)
     parser.add_argument("--model-var-type", choices=["learned", "fixed-small", "fixed-large"], default="fixed-large", type=str)
     parser.add_argument("--loss-type", choices=["kl", "mse"], default="mse", type=str)
-    parser.add_argument("--task", choices=["generation", ], default="generation")
     parser.add_argument("--train-device", default="cuda:0", type=str)
     parser.add_argument("--eval-device", default="cuda:0", type=str)
     parser.add_argument("--image-dir", default="./images", type=str)
@@ -42,7 +35,6 @@ if __name__ == "__main__":
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
-    parser.add_argument("--log-dir", default="./logs", type=str)
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument("--resume", action="store_true", help="to resume from a checkpoint")
     parser.add_argument("--eval", action="store_true", help="whether to evaluate fid during training")
@@ -75,15 +67,19 @@ if __name__ == "__main__":
     warmup = gettr("warmup")
     train_device = gettr("train_device")
     eval_device = gettr("eval_device")
+
+    split = "all" if dataset == "celeba" else "train"
     trainloader = get_dataloader(
-        dataset, batch_size=batch_size, split="train", val_size=0., random_seed=seed, root=root, pin_memory=True)
+        dataset, batch_size=batch_size, split=split, val_size=0.,
+        random_seed=seed, root=root, drop_last=True, pin_memory=True)  # drop_last to have a static input shape
 
     # diffusion parameters
     getdif = partial(get_param, configs_1=configs.get("diffusion", {}), configs_2=args)
     beta_schedule = getdif("beta_schedule")
     beta_start, beta_end = getdif("beta_start"), getdif("beta_end")
     timesteps = getdif("timesteps")
-    betas = get_beta_schedule(beta_schedule, beta_start=beta_start, beta_end=beta_end, num_diffusion_timesteps=timesteps)
+    betas = get_beta_schedule(
+        beta_schedule, beta_start=beta_start, beta_end=beta_end, num_diffusion_timesteps=timesteps)
     model_mean_type = getdif("model_mean_type")
     model_var_type = getdif("model_var_type")
     loss_type = getdif("loss_type")
@@ -94,7 +90,7 @@ if __name__ == "__main__":
     # denoise parameters
     out_channels = 2 * in_channels if model_var_type == "learned" else in_channels
 
-    model = MODEL_LIST[args.model](out_channels=out_channels, **configs["denoise"])
+    model = UNet(out_channels=out_channels, **configs["denoise"])
     optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
     # Note1: lr_lambda is used to calculate the **multiplicative factor**
     # Note2: index starts at 0

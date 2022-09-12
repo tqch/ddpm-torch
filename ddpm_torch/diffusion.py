@@ -60,14 +60,14 @@ class GaussianDiffusion:
         # q(x_{t-1} | x_t, x_0)
         # refer to the formula 1-3 in README.md
         self.sqrt_alphas_bar_prev = np.sqrt(self.alphas_bar_prev)
-        self.sqrt_one_minus_alphas_bar = np.sqrt(1 - self.alphas_bar)
+        self.sqrt_one_minus_alphas_bar = np.sqrt(1. - self.alphas_bar)
         self.sqrt_recip_alphas_bar = np.sqrt(1. / self.alphas_bar)
         self.sqrt_recip_m1_alphas_bar = np.sqrt(1. / self.alphas_bar - 1.)  # m1: minus 1
-        self.posterior_var = betas * (1 - self.alphas_bar_prev) / (1 - self.alphas_bar)
+        self.posterior_var = betas * (1. - self.alphas_bar_prev) / (1. - self.alphas_bar)
         self.posterior_logvar_clipped = np.log(np.concatenate([
             np.array([self.posterior_var[1], ], dtype=np.float64), self.posterior_var[1:]]))
-        self.posterior_mean_coef1 = betas * self.sqrt_alphas_bar_prev / (1 - self.alphas_bar)
-        self.posterior_mean_coef2 = np.sqrt(alphas) * (1 - self.alphas_bar_prev) / (1 - self.alphas_bar)
+        self.posterior_mean_coef1 = betas * self.sqrt_alphas_bar_prev / (1. - self.alphas_bar)
+        self.posterior_mean_coef2 = np.sqrt(alphas) * (1. - self.alphas_bar_prev) / (1. - self.alphas_bar)
 
     @staticmethod
     def _extract(arr, t, ndim):
