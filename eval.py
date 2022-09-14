@@ -29,15 +29,17 @@ if __name__ == "__main__":
     parser.add_argument("--precomputed-dir", default="./precomputed", type=str)
     parser.add_argument("--metrics", nargs="+", default=["fid", "pr"], type=str)
     parser.add_argument("--seed", default=1234, type=int)
+    parser.add_argument("--affix", default="", type=str)
 
     args = parser.parse_args()
 
     root = os.path.expanduser(args.root)
     dataset = args.dataset
+    affix = args.affix
     print(f"Dataset: {dataset}")
 
     eval_dir = args.eval_dir
-    img_dir = os.path.join(eval_dir, dataset)
+    img_dir = os.path.join(eval_dir, dataset + affix)
     device = torch.device(args.device)
 
     args = parser.parse_args()

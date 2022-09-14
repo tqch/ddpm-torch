@@ -1,17 +1,157 @@
 import os
 import json
 import torch
+from datetime import datetime
 from torch.optim import Adam, lr_scheduler
-import matplotlib as mpl
 from ddpm_torch import *
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed.elastic.multiprocessing import errors
+from functools import partial
 
 
-mpl.rcParams["figure.dpi"] = 144
+def logger(msg, **kwargs):
+    if dist.get_rank() == 0:
+        print(msg, **kwargs)
+
+
+@errors.record
+def main(args):
+    root = os.path.expanduser(args.root)
+    dataset = args.dataset
+
+    in_channels = DATA_INFO[dataset]["channels"]
+    image_res = DATA_INFO[dataset]["resolution"]
+    image_shape = (in_channels, ) + image_res
+
+    # set seed for all rngs
+    seed = args.seed
+    seed_all(seed)
+
+    configs_path = os.path.join(args.config_dir, args.dataset + ".json")
+    with open(configs_path, "r") as f:
+        configs = json.load(f)
+
+    # train parameters
+    gettr = partial(get_param, configs_1=configs.get("train", {}), configs_2=args)
+    batch_size = gettr("batch_size")
+    beta1, beta2 = gettr("beta1"), gettr("beta2")
+    lr = gettr("lr")
+    epochs = gettr("epochs")
+    grad_norm = gettr("grad_norm")
+    warmup = gettr("warmup")
+    train_device = torch.device(args.train_device)
+    eval_device = torch.device(args.eval_device)
+
+    # diffusion parameters
+    getdif = partial(get_param, configs_1=configs.get("diffusion", {}), configs_2=args)
+    beta_schedule = getdif("beta_schedule")
+    beta_start, beta_end = getdif("beta_start"), getdif("beta_end")
+    timesteps = getdif("timesteps")
+    betas = get_beta_schedule(
+        beta_schedule, beta_start=beta_start, beta_end=beta_end, num_diffusion_timesteps=timesteps)
+    model_mean_type = getdif("model_mean_type")
+    model_var_type = getdif("model_var_type")
+    loss_type = getdif("loss_type")
+
+    diffusion = GaussianDiffusion(
+        betas=betas, model_mean_type=model_mean_type, model_var_type=model_var_type, loss_type=loss_type)
+
+    # denoise parameters
+    out_channels = 2 * in_channels if model_var_type == "learned" else in_channels
+    _model = UNet(out_channels=out_channels, **configs["denoise"])
+
+    distributed = args.distributed
+    if distributed:
+        # check whether torch.distributed is available
+        # CUDA devices are required to run with NCCL backend
+        assert dist.is_available() and torch.cuda.is_available()
+        dist.init_process_group("nccl")
+        rank = dist.get_rank()
+        _model = _model.to(rank)
+        model = DDP(_model, device_ids=[rank, ])
+        train_device = torch.device(f"cuda:{rank}")
+    else:
+        model = _model.to(train_device)
+
+    optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
+    # Note1: lr_lambda is used to calculate the **multiplicative factor**
+    # Note2: index starts at 0
+    scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda t: min((t + 1) / warmup, 1.0))
+
+    split = "all" if dataset == "celeba" else "train"
+    num_workers = args.num_workers
+    trainloader, sampler = get_dataloader(
+        dataset, batch_size=batch_size, split=split, val_size=0., random_seed=seed,
+        root=root, drop_last=True, pin_memory=True, num_workers=num_workers, distributed=distributed
+    )  # drop_last to have a static input shape; num_workers > 0 to enable asynchronous data loading
+
+    hps = {
+        "lr": lr,
+        "batch_size": batch_size,
+        "configs": configs
+    }
+    hps_info = dict2str(hps)
+    timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")
+
+    chkpt_dir = args.chkpt_dir
+    if not os.path.exists(chkpt_dir):
+        os.makedirs(chkpt_dir)
+
+    # keep a record of hyperparameter setting used for this experiment run
+    with open(os.path.join(chkpt_dir, f"exp_{timestamp}.info"), "w") as f:
+        f.write(hps_info)
+
+    chkpt_path = os.path.join(
+        chkpt_dir,
+        f"{dataset}_diffusion.pt"
+    )
+    chkpt_intv = args.chkpt_intv
+    logger(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
+    logger(f"every {chkpt_intv} epochs")
+
+    image_dir = os.path.join(args.image_dir, f"{dataset}")
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
+    num_save_images = args.num_save_images
+    logger(f"Generated images (x{num_save_images}) will be saved to {os.path.abspath(image_dir)}")
+
+    trainer = Trainer(
+        model=model,
+        optimizer=optimizer,
+        diffusion=diffusion,
+        epochs=epochs,
+        trainloader=trainloader,
+        scheduler=scheduler,
+        use_ema=args.use_ema,
+        grad_norm=grad_norm,
+        shape=image_shape,
+        device=train_device,
+        chkpt_intv=chkpt_intv,
+        num_save_images=num_save_images,
+        ema_decay=args.ema_decay,
+        rank=rank
+    )
+    evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
+    if args.resume:
+        try:
+            map_location = {"cuda:0": f"cuda:{rank}"} if distributed else None
+            trainer.resume_from_chkpt(chkpt_path, map_location=map_location)
+        except FileNotFoundError:
+            logger("Checkpoint file does not exist!")
+            logger("Starting from scratch...")
+
+    # use cudnn benchmarking algorithm to select the best conv algorithm
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.benchmark = True
+        logger(f"cuDNN benchmark: ON")
+
+    logger("Training starts...", flush=True)
+    trainer.train(evaluator, chkpt_path=chkpt_path, image_dir=image_dir)
 
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
-    from functools import partial
 
     parser = ArgumentParser()
     parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba"], default="cifar10")
@@ -41,114 +181,6 @@ if __name__ == "__main__":
     parser.add_argument("--eval", action="store_true", help="whether to evaluate fid during training")
     parser.add_argument("--use-ema", action="store_true", help="whether to use exponential moving average")
     parser.add_argument("--ema-decay", default=0.9999, type=float, help="decay factor of ema")
+    parser.add_argument("--distributed", action="store_true", help="whether to use distributed training")
 
-    args = parser.parse_args()
-
-    root = os.path.expanduser(args.root)
-    dataset = args.dataset
-
-    in_channels = DATA_INFO[dataset]["channels"]
-    image_res = DATA_INFO[dataset]["resolution"][0]
-
-    # set seed for all rngs
-    seed = args.seed
-    seed_all(seed)
-
-    configs_path = os.path.join(args.config_dir, args.dataset + ".json")
-    with open(configs_path, "r") as f:
-        configs = json.load(f)
-
-    # train parameters
-    gettr = partial(get_param, configs_1=configs.get("train", {}), configs_2=args)
-    batch_size = gettr("batch_size")
-    beta1, beta2 = gettr("beta1"), gettr("beta2")
-    lr = gettr("lr")
-    epochs = gettr("epochs")
-    grad_norm = gettr("grad_norm")
-    warmup = gettr("warmup")
-    train_device = gettr("train_device")
-    eval_device = gettr("eval_device")
-
-    split = "all" if dataset == "celeba" else "train"
-    num_workers = args.num_workers
-    trainloader = get_dataloader(
-        dataset, batch_size=batch_size, split=split, val_size=0., random_seed=seed,
-        root=root, drop_last=True, pin_memory=True, num_workers=num_workers
-    )  # drop_last to have a static input shape; num_workers > 0 to enable asynchronous data loading
-
-    # diffusion parameters
-    getdif = partial(get_param, configs_1=configs.get("diffusion", {}), configs_2=args)
-    beta_schedule = getdif("beta_schedule")
-    beta_start, beta_end = getdif("beta_start"), getdif("beta_end")
-    timesteps = getdif("timesteps")
-    betas = get_beta_schedule(
-        beta_schedule, beta_start=beta_start, beta_end=beta_end, num_diffusion_timesteps=timesteps)
-    model_mean_type = getdif("model_mean_type")
-    model_var_type = getdif("model_var_type")
-    loss_type = getdif("loss_type")
-
-    diffusion = GaussianDiffusion(
-        betas=betas, model_mean_type=model_mean_type, model_var_type=model_var_type, loss_type=loss_type)
-
-    # denoise parameters
-    out_channels = 2 * in_channels if model_var_type == "learned" else in_channels
-
-    model = UNet(out_channels=out_channels, **configs["denoise"])
-    optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
-    # Note1: lr_lambda is used to calculate the **multiplicative factor**
-    # Note2: index starts at 0
-    scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda t: min((t + 1) / warmup, 1.0))
-
-    hps = {
-        "lr": lr,
-        "batch_size": batch_size,
-        "configs": configs
-    }
-    hps_info = dict2str(hps)
-
-    chkpt_dir = args.chkpt_dir
-    if not os.path.exists(chkpt_dir):
-        os.makedirs(chkpt_dir)
-    chkpt_path = os.path.join(
-        chkpt_dir,
-        f"{dataset}_diffusion.pt"
-    )
-    chkpt_intv = args.chkpt_intv
-    print(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
-    print(f"every {chkpt_intv} epochs")
-
-    image_dir = os.path.join(args.image_dir, f"{dataset}")
-    if not os.path.exists(image_dir):
-        os.makedirs(image_dir)
-    num_save_images = args.num_save_images
-    print(f"Generated images (x{num_save_images}) will be saved to {os.path.abspath(image_dir)}")
-
-    trainer = Trainer(
-        model=model,
-        optimizer=optimizer,
-        diffusion=diffusion,
-        epochs=epochs,
-        trainloader=trainloader,
-        scheduler=scheduler,
-        use_ema=args.use_ema,
-        grad_norm=grad_norm,
-        device=train_device,
-        chkpt_intv=chkpt_intv,
-        num_save_images=num_save_images,
-        ema_decay=args.ema_decay
-    )
-    evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
-    if args.resume:
-        try:
-            trainer.resume_from_chkpt(chkpt_path)
-        except FileNotFoundError:
-            print("Checkpoint file does not exist!")
-            print("Starting from scratch...")
-
-    # use cudnn benchmarking algorithm to select the best conv algorithm
-    if torch.backends.cudnn.is_available():
-        torch.backends.cudnn.benchmark = True
-        print(f"cuDNN benchmark: ON")
-
-    print("Training starts...", flush=True)
-    trainer.train(evaluator, chkpt_path=chkpt_path, image_dir=image_dir)
+    main(parser.parse_args())

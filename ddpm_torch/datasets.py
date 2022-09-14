@@ -4,10 +4,10 @@ import PIL
 import torch
 import numpy as np
 from torchvision import transforms, datasets
-from torch.utils.data import DataLoader, SubsetRandomSampler, Sampler
+from torch.utils.data import DataLoader, Subset, Sampler
+from torch.utils.data.distributed import DistributedSampler
 from collections import namedtuple
 
-sampler = SubsetRandomSampler
 CSV = namedtuple("CSV", ["header", "index", "data"])
 CONDITIONAL = False
 
@@ -162,7 +162,8 @@ def get_dataloader(
         root=ROOT,
         pin_memory=False,
         drop_last=False,
-        num_workers=0
+        num_workers=0,
+        distributed=False
 ):
     assert isinstance(val_size, float) and 0 <= val_size < 1
     transform = DATA_INFO[dataset]["transform"]
@@ -173,27 +174,20 @@ def get_dataloader(
         "num_workers": num_workers
     }
     if dataset == "celeba":
-        data = DATA_INFO[dataset]["data"](
-            root=root, split=split, transform=transform)
-        shuffle = True if split == "train" else False
-        dataloader = DataLoader(data, shuffle=shuffle, **dataloader_configs)
+        data = DATA_INFO[dataset]["data"](root=root, split=split, transform=transform)
     else:
         if split == "test":
             data = DATA_INFO[dataset]["data"](
                 root=root, train=False, download=False, transform=transform)
-            dataloader = DataLoader(data, **dataloader_configs)
         else:
             data = DATA_INFO[dataset]["data"](
                 root=root, train=True, download=False, transform=transform)
             if val_size == 0:
                 assert split == "train"
-                dataloader = DataLoader(data, shuffle=True, **dataloader_configs)
             else:
                 train_inds, val_inds = train_val_split(dataset, val_size, random_seed)
-                if split == "train":
-                    sampler = SubsetRandomSampler(train_inds)
-                elif split == "valid":
-                    sampler = SubsetSequentialSampler(val_inds)  # trivial sequential sampler
-                # no need of shuffling when using customized sampler
-                dataloader = DataLoader(data, sampler=sampler, **dataloader_configs)
-    return dataloader
+                data = Subset(data, {"train": train_inds, "valid": val_inds}[split])
+    dataloader_configs["sampler"] = sampler = DistributedSampler(data) if distributed else None
+    dataloader_configs["shuffle"] = (sampler is None) if split in {"train", "all"} else False
+    dataloader = DataLoader(data, **dataloader_configs)
+    return dataloader, sampler

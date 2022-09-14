@@ -60,7 +60,8 @@ if __name__ == "__main__":
     model = UNet(out_channels=in_channels, **configs["denoise"])
     chkpt_dir = args.chkpt_dir
     chkpt_path = os.path.join(chkpt_dir, f"{dataset}_diffusion.pt")
-    if args.use_ema:
+    use_ema = args.use_ema
+    if use_ema:
         model.load_state_dict(torch.load(chkpt_path)["ema"]["shadow"])
     else:
         model.load_state_dict(torch.load(chkpt_path)["model"])
@@ -71,7 +72,8 @@ if __name__ == "__main__":
         if p.requires_grad:
             p.requires_grad_(False)
 
-    save_dir = os.path.join(args.save_dir, dataset)
+    folder_name = dataset + ("_ema" if use_ema else "") + ("_ddim" if use_ddim else "")
+    save_dir = os.path.join(args.save_dir, folder_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     batch_size = args.batch_size

@@ -75,6 +75,14 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         ) * np.sqrt(1 - self.alphas_bar_prev) / (1. - self.alphas_bar)
         self.posterior_mean_coef1 = self.sqrt_alphas_bar_prev * (1. - np.sqrt(self.alphas) * self.posterior_mean_coef2)
 
+        # for fixed model_var_type's
+        self.fixed_model_var, self.fixed_model_logvar = {
+            "fixed-large": (
+                self.betas, np.log(
+                np.concatenate([np.array([self.posterior_var[1]]), self.betas[1:]]).clip(min=1e-20))),
+            "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
+        }[self.model_var_type]
+
         self.subsequence = torch.as_tensor(subsequence)
 
     def p_sample(self, denoise_fn, shape, device=torch.device("cpu"), noise=None):
@@ -92,6 +100,19 @@ class DDIM(ddpm_torch.GaussianDiffusion):
             x_t = self.p_sample_step(_denoise_fn, x_t, t)
         return x_t
 
+    @staticmethod
+    def from_ddpm(diffusion, eta, subsequence):
+        return DDIM(**{
+            k: diffusion.__dict__.get(k, None)
+            for k in ["betas", "model_mean_type", "model_var_type", "loss_type"]
+        }, eta=eta, subsequence=subsequence)
+
 
 if __name__ == "__main__":
-    print(get_selection_schedule("linear", 10, 1000)(np.arange(10)))
+    from ddpm_torch import GaussianDiffusion, get_beta_schedule
+    subsequence = get_selection_schedule("linear", 10, 1000)
+    print(subsequence)
+    betas = get_beta_schedule("linear", 0.0001, 0.02, 1000)
+    diffusion = GaussianDiffusion(betas, "eps", "fixed-small", "mse")
+    print(diffusion.__dict__)
+    print(DDIM.from_ddpm(diffusion, eta=0., subsequence=subsequence).__dict__)

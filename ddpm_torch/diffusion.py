@@ -69,6 +69,12 @@ class GaussianDiffusion:
         self.posterior_mean_coef1 = betas * self.sqrt_alphas_bar_prev / (1. - self.alphas_bar)
         self.posterior_mean_coef2 = np.sqrt(alphas) * (1. - self.alphas_bar_prev) / (1. - self.alphas_bar)
 
+        # for fixed model_var_type's
+        self.fixed_model_var, self.fixed_model_logvar = {
+            "fixed-large": (self.betas, np.log(np.concatenate([np.array([self.posterior_var[1]]), self.betas[1:]]))),
+            "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
+        }[self.model_var_type]
+
     @staticmethod
     def _extract(arr, t, ndim):
         B = len(t)
@@ -109,11 +115,8 @@ class GaussianDiffusion:
             out, model_logvar = out.chunk(2, dim=1)
             model_var = torch.exp(model_logvar)
         elif self.model_var_type in ["fixed-small", "fixed-large"]:
-            model_var, model_logvar = {
-                "fixed-large": (self.betas, np.log(np.concatenate([np.array([self.posterior_var[1]]), self.betas[1:]]))),
-                "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
-            }[self.model_var_type]
-            model_var, model_logvar = self._extract(model_var, t, ndim=ndim), self._extract(model_logvar, t, ndim=ndim)
+            model_var, model_logvar = self._extract(self.fixed_model_var, t, ndim=ndim),\
+                                      self._extract(self.fixed_model_logvar, t, ndim=ndim)
             model_var, model_logvar = model_var.to(x_t.device), model_logvar.to(x_t.device)
         else:
             raise NotImplementedError(self.model_var_type)

@@ -63,6 +63,7 @@ class Trainer:
             diffusion,
             epochs,
             trainloader,
+            sampler=None,
             scheduler=None,
             use_ema=False,
             grad_norm=1.0,
@@ -70,7 +71,8 @@ class Trainer:
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             chkpt_intv=5,  # save a checkpoint every {chkpt_intv} epochs
             num_save_images=64,
-            ema_decay=0.9999
+            ema_decay=0.9999,
+            rank=0  # process id for distributed training
     ):
         model.to(device)
         self.model = model
@@ -79,6 +81,7 @@ class Trainer:
         self.epochs = epochs
         self.start_epoch = 0
         self.trainloader = trainloader
+        self.sampler = sampler
         if shape is None:
             shape = next(iter(trainloader))[0].shape[1:]
         self.shape = shape
@@ -92,6 +95,8 @@ class Trainer:
         self.device = device
         self.chkpt_intv = chkpt_intv
         self.num_save_images = num_save_images
+
+        self.is_main = rank == 0
 
         self.stats = RunningStatistics(loss=None)
 
@@ -117,41 +122,45 @@ class Trainer:
             self.ema.update()
         self.stats.update(B, loss=loss.item() * B)
 
+    def sample_fn(self, noise, diffusion=None):
+        if diffusion is None:
+            diffusion = self.diffusion
+        shape = noise.shape
+        with torch.inference_mode():
+            with self.ema:
+                sample = diffusion.p_sample(
+                    denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
+        return sample
+
     def train(self, evaluator=None, chkpt_path=None, image_dir=None):
 
-        def sample_fn(noise):
-            shape = noise.shape
-            with torch.inference_mode():
-                with self.ema:
-                    sample = self.diffusion.p_sample(
-                        denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
-            return sample
         num_samples = self.num_save_images
         if num_samples:
             noise = torch.randn((num_samples,) + self.shape)  # fixed x_T for image generation
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
-            with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs") as t:
+            with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_main) as t:
                 for i, (x, _) in enumerate(t):
                     self.step(x.to(self.device))
                     t.set_postfix(self.current_stats)
                     if i == len(self.trainloader) - 1:
                         self.model.eval()
                         if evaluator is not None:
-                            eval_results = evaluator.eval(sample_fn)
+                            eval_results = evaluator.eval(self.sample_fn)
                         else:
                             eval_results = dict()
                         results = dict()
                         results.update(self.current_stats)
                         results.update(eval_results)
                         t.set_postfix(results)
-            if num_samples and image_dir:
-                with torch.no_grad():
-                    x = sample_fn(noise).cpu()
-                    save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
-            if not (e+1) % self.chkpt_intv and chkpt_path:
-                self.save_checkpoint(chkpt_path, epoch=e+1, **results)
+            if self.is_main:
+                if num_samples and image_dir:
+                    with torch.no_grad():
+                        x = self.sample_fn(noise).cpu()
+                        save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
+                if not (e + 1) % self.chkpt_intv and chkpt_path:
+                    self.save_checkpoint(chkpt_path, epoch=e+1, **results)
 
     @property
     def trainees(self):
@@ -189,10 +198,12 @@ class Evaluator:
     def __init__(
             self,
             dataset,
+            diffusion=None,
             eval_batch_size=256,
             max_eval_count=10000,
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ):
+        self.diffusion = diffusion
         # inception stats
         self.istats = InceptionStatistics(device=device)
         self.eval_batch_size = eval_batch_size
@@ -204,8 +215,8 @@ class Evaluator:
         self.istats.reset()
         with torch.no_grad():
             for _ in range(0, self.max_eval_count + self.eval_batch_size, self.eval_batch_size):
-                with torch.no_grad():
-                    x = sample_fn(self.eval_batch_size)
+                with torch.inference_mode():
+                    x = sample_fn(self.eval_batch_size, diffusion=self.diffusion)
                 self.istats(x.to(self.device))
         gen_mean, gen_var = self.istats.get_statistics()
         return {"fid": calc_fd(gen_mean, gen_var, self.target_mean, self.target_var)}
