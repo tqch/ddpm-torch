@@ -11,7 +11,7 @@ from functools import partial
 
 
 def logger(msg, **kwargs):
-    if dist.get_rank() == 0:
+    if dist.is_initialized() and dist.get_rank() == 0:
         print(msg, **kwargs)
 
 
@@ -72,6 +72,7 @@ def main(args):
         model = DDP(_model, device_ids=[rank, ])
         train_device = torch.device(f"cuda:{rank}")
     else:
+        rank = 0
         model = _model.to(train_device)
 
     optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
