@@ -187,7 +187,8 @@ def get_dataloader(
             else:
                 train_inds, val_inds = train_val_split(dataset, val_size, random_seed)
                 data = Subset(data, {"train": train_inds, "valid": val_inds}[split])
-    dataloader_configs["sampler"] = sampler = DistributedSampler(data) if distributed else None
+    dataloader_configs["sampler"] = sampler = DistributedSampler(
+        data, shuffle=True, seed=random_seed, drop_last=drop_last) if distributed else None
     dataloader_configs["shuffle"] = (sampler is None) if split in {"train", "all"} else False
     dataloader = DataLoader(data, **dataloader_configs)
     return dataloader, sampler

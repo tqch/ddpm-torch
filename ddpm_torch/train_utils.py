@@ -5,6 +5,7 @@ from .utils import save_image, EMA
 from .metrics.fid_score import InceptionStatistics, get_precomputed, calc_fd
 from tqdm import tqdm
 from contextlib import nullcontext
+from torch.utils.data.distributed import DistributedSampler
 
 
 class DummyScheduler:
@@ -72,6 +73,7 @@ class Trainer:
             chkpt_intv=5,  # save a checkpoint every {chkpt_intv} epochs
             num_save_images=64,
             ema_decay=0.9999,
+            distributed=False,
             rank=0  # process id for distributed training
     ):
         model.to(device)
@@ -96,6 +98,9 @@ class Trainer:
         self.chkpt_intv = chkpt_intv
         self.num_save_images = num_save_images
 
+        if distributed:
+            assert sampler is not None
+        self.distributed = distributed
         self.is_main = rank == 0
 
         self.stats = RunningStatistics(loss=None)
@@ -140,6 +145,8 @@ class Trainer:
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
+            if isinstance(self.sampler, DistributedSampler):
+                self.sampler.set_epoch(e)
             with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_main) as t:
                 for i, (x, _) in enumerate(t):
                     self.step(x.to(self.device))

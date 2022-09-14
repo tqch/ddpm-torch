@@ -123,6 +123,7 @@ def main(args):
         diffusion=diffusion,
         epochs=epochs,
         trainloader=trainloader,
+        sampler=sampler,
         scheduler=scheduler,
         use_ema=args.use_ema,
         grad_norm=grad_norm,
@@ -131,7 +132,8 @@ def main(args):
         chkpt_intv=chkpt_intv,
         num_save_images=num_save_images,
         ema_decay=args.ema_decay,
-        rank=rank
+        rank=rank,
+        distributed=distributed
     )
     evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
     if args.resume:
