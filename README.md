@@ -137,25 +137,25 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 
 *Table of evaluation metrics*
 
-|Dataset|FID (↓)|Precision (↑)|Recall (↑)|Training steps|
-|:---:|:---:|:---:|:---:|:---:|
-|CIFAR-10|11.11|0.738|0.421|46.8k|
-|\|__|6.45|0.727|0.480|93.6k|
-|\|__|4.99|0.727|0.503|140.4k|
-|\|__|4.48|0.730|0.517|187.2k|
-|\|__|4.07|0.731|**0.524**|234.0k|
-|\|__|**4.01**|**0.733**|0.520|280.8k|
-|CelebA|4.45|0.778|0.478|237.3k|
+|Dataset|FID (↓)|Precision (↑)|Recall (↑)|Training steps|Training loss|
+|:---:|:---:|:---:|:---:|:---:|:---:|
+|CIFAR-10|11.11|0.738|0.421|46.8k|0.0296|
+|\|__|6.45|0.727|0.480|93.6k|0.0294|
+|\|__|4.99|0.727|0.503|140.4k|0.0287|
+|\|__|4.48|0.730|0.517|187.2k|0.0289|
+|\|__|4.07|0.731|**0.524**|234.0k|0.0286|
+|\|__|**4.01**|**0.733**|0.520|280.8k|**0.0285**|
+|CelebA|4.45|0.778|0.478|237.3k|0.0154|
 
-#### CIFAR-10
+#### CIFAR-10 [[checkpoint]](https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_cifar10_720.pt)
 
-##### Training samples (720 epochs)
+##### Training samples (720 epochs) 
 <p align="center"> <img alt="cifar10_train_100" src="./assets/cifar10_train_720.webp" /> </p>
 
 ##### Denoising process
 <p align="center"> <img alt="cifar10_denoise_100" src="./assets/cifar10_denoise_100.webp" /></p>
 
-#### CelebA
+#### CelebA [[checkpoint]](https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_celeba_150.pt)
 
 ##### Training samples (150 epochs)
 <p align="center"> <img alt="celeba_train_100" src="./assets/celeba_train_150.webp" /> </p>
