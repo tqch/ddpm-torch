@@ -6,6 +6,7 @@ from .metrics.fid_score import InceptionStatistics, get_precomputed, calc_fd
 from tqdm import tqdm
 from contextlib import nullcontext
 from torch.utils.data.distributed import DistributedSampler
+import torch.distributed as dist
 
 
 class DummyScheduler:
@@ -45,15 +46,6 @@ class RunningStatistics:
         for k in self.stats:
             out_str += f"\t{k} = {{{k}}}\n"  # double curly-bracket to escape
         return out_str.format(self.count, **self.stats)
-
-
-def rusume_from_chkpt(chkpt_path, model, optimizers, device=torch.device("cpu")):
-    chkpt = torch.load(chkpt_path, map_location=device)
-    model.load_state_dict(chkpt["model"])
-    for k in optimizers.keys():
-        optimizers[k].load_state_dict(chkpt[k])
-    fid = chkpt["fid"]
-    return fid, model, optimizers
 
 
 class Trainer:
@@ -168,6 +160,8 @@ class Trainer:
                         save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
                 if not (e + 1) % self.chkpt_intv and chkpt_path:
                     self.save_checkpoint(chkpt_path, epoch=e+1, **results)
+            if self.distributed:
+                dist.barrier()  # synchronize all processes here
 
     @property
     def trainees(self):
@@ -182,8 +176,8 @@ class Trainer:
     def current_stats(self):
         return self.stats.extract()
 
-    def resume_from_chkpt(self, chkpt_path):
-        chkpt = torch.load(chkpt_path, map_location=self.device)
+    def resume_from_chkpt(self, chkpt_path, map_location):
+        chkpt = torch.load(chkpt_path, map_location=map_location)
         for trainee in self.trainees:
             getattr(self, trainee).load_state_dict(chkpt[trainee])
         self.start_epoch = chkpt["epoch"]
