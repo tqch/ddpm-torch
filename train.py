@@ -10,13 +10,15 @@ from torch.distributed.elastic.multiprocessing import errors
 from functools import partial
 
 
-def logger(msg, **kwargs):
-    if dist.is_initialized() and dist.get_rank() == 0:
-        print(msg, **kwargs)
-
-
 @errors.record
 def main(args):
+
+    distributed = args.distributed
+
+    def logger(msg, **kwargs):
+        if not distributed or dist.get_rank() == 0:
+            print(msg, **kwargs)
+
     root = os.path.expanduser(args.root)
     dataset = args.dataset
 
@@ -61,18 +63,18 @@ def main(args):
     out_channels = 2 * in_channels if model_var_type == "learned" else in_channels
     _model = UNet(out_channels=out_channels, **configs["denoise"])
 
-    distributed = args.distributed
     if distributed:
         # check whether torch.distributed is available
         # CUDA devices are required to run with NCCL backend
         assert dist.is_available() and torch.cuda.is_available()
         dist.init_process_group("nccl")
-        rank = dist.get_rank()
+        rank = dist.get_rank()  # global process id across all node(s)
+        local_rank = int(os.environ["LOCAL_RANK"])  # local device id on a single node
         _model = _model.to(rank)
-        model = DDP(_model, device_ids=[rank, ])
-        train_device = torch.device(f"cuda:{rank}")
+        model = DDP(_model, device_ids=[local_rank, ])
+        train_device = torch.device(f"cuda:{local_rank}")
     else:
-        rank = 0
+        rank = local_rank = 0  # main process by default
         model = _model.to(train_device)
 
     optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
@@ -103,10 +105,7 @@ def main(args):
     with open(os.path.join(chkpt_dir, f"exp_{timestamp}.info"), "w") as f:
         f.write(hps_info)
 
-    chkpt_path = os.path.join(
-        chkpt_dir,
-        f"{dataset}_diffusion.pt"
-    )
+    chkpt_path = os.path.join(chkpt_dir, f"ddpm_{dataset}.pt")
     chkpt_intv = args.chkpt_intv
     logger(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
     logger(f"every {chkpt_intv} epochs")
@@ -136,9 +135,11 @@ def main(args):
         distributed=distributed
     )
     evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
-    if args.resume:
+    # in case of elastic launch, resume should always be turned on
+    resume = args.resume or distributed
+    if resume:
         try:
-            map_location = {"cuda:0": f"cuda:{rank}"} if distributed else None
+            map_location = {"cuda:0": f"cuda:{local_rank}"} if distributed else train_device
             trainer.resume_from_chkpt(chkpt_path, map_location=map_location)
         except FileNotFoundError:
             logger("Checkpoint file does not exist!")
@@ -174,7 +175,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", default=4, type=int, help="number of workers for data loading")
     parser.add_argument("--train-device", default="cuda:0", type=str)
     parser.add_argument("--eval-device", default="cuda:0", type=str)
-    parser.add_argument("--image-dir", default="./images", type=str)
+    parser.add_argument("--image-dir", default="./images/train", type=str)
     parser.add_argument("--num-save-images", default=64, type=int, help="number of images to generate & save")
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)

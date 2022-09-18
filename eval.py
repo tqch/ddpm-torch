@@ -25,21 +25,22 @@ if __name__ == "__main__":
     parser.add_argument("--row-batch-size", default=10000, type=int)
     parser.add_argument("--col-batch-size", default=10000, type=int)
     parser.add_argument("--device", default="cuda:0", type=str)
-    parser.add_argument("--eval-dir", default="./eval")
+    parser.add_argument("--eval-dir", default="./images/eval")
     parser.add_argument("--precomputed-dir", default="./precomputed", type=str)
     parser.add_argument("--metrics", nargs="+", default=["fid", "pr"], type=str)
     parser.add_argument("--seed", default=1234, type=int)
-    parser.add_argument("--affix", default="", type=str)
+    parser.add_argument("--folder-name", default="", type=str)
 
     args = parser.parse_args()
 
     root = os.path.expanduser(args.root)
     dataset = args.dataset
-    affix = args.affix
     print(f"Dataset: {dataset}")
 
-    eval_dir = args.eval_dir
-    img_dir = os.path.join(eval_dir, dataset + affix)
+    img_dir = eval_dir = args.eval_dir
+    folder_name = args.folder_name
+    if folder_name:
+        img_dir = os.path.join(img_dir, folder_name)
     device = torch.device(args.device)
 
     args = parser.parse_args()

@@ -18,13 +18,15 @@ if __name__ == "__main__":
     parser.add_argument("--total-size", default=50000, type=int)
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
-    parser.add_argument("--save-dir", default="./eval", type=str)
+    parser.add_argument("--chkpt-path", default="", type=str)
+    parser.add_argument("--save-dir", default="./images/eval", type=str)
     parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument("--use-ema", action="store_true")
     parser.add_argument("--use-ddim", action="store_true")
     parser.add_argument("--eta", default=0., type=float)
     parser.add_argument("--skip-schedule", default="linear", type=str)
     parser.add_argument("--subseq-size", default=10, type=int)
+    parser.add_argument("--affix", default="", type=str)
 
     args = parser.parse_args()
 
@@ -37,7 +39,6 @@ if __name__ == "__main__":
     config_dir = args.config_dir
     with open(os.path.join(config_dir, dataset + ".json")) as f:
         configs = json.load(f)
-
 
     diffusion_kwargs = configs["diffusion"]
     beta_schedule = diffusion_kwargs.pop("beta_schedule")
@@ -57,22 +58,27 @@ if __name__ == "__main__":
     else:
         diffusion = GaussianDiffusion(betas, **diffusion_kwargs)
 
+    device = torch.device(args.device)
     model = UNet(out_channels=in_channels, **configs["denoise"])
+    model.to(device)
     chkpt_dir = args.chkpt_dir
-    chkpt_path = os.path.join(chkpt_dir, f"{dataset}_diffusion.pt")
+    chkpt_path = args.chkpt_path or os.path.join(chkpt_dir, f"ddpm_{dataset}.pt")
+    folder_name = os.path.basename(chkpt_path)[:-3]  # truncated at file extension
     use_ema = args.use_ema
     if use_ema:
-        model.load_state_dict(torch.load(chkpt_path)["ema"]["shadow"])
+        state_dict = torch.load(chkpt_path, map_location=device)["ema"]["shadow"]
     else:
-        model.load_state_dict(torch.load(chkpt_path)["model"])
-    device = torch.device(args.device)
-    model.to(device)
+        state_dict = torch.load(chkpt_path, map_location=device)["model"]
+    for k in list(state_dict.keys()):
+        if k.split(".")[0] == "module":  # state_dict of DDP
+            state_dict[".".join(k.split(".")[1:])] = state_dict.pop(k)
+    model.load_state_dict(state_dict)
     model.eval()
     for p in model.parameters():
         if p.requires_grad:
             p.requires_grad_(False)
 
-    folder_name = dataset + ("_ema" if use_ema else "") + ("_ddim" if use_ddim else "")
+    folder_name = folder_name + args.affix
     save_dir = os.path.join(args.save_dir, folder_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -86,6 +92,8 @@ if __name__ == "__main__":
         with Image.fromarray(arr, mode="RGB") as im:
             im.save(f"{save_dir}/{uuid.uuid4()}.png")
 
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.benchmark = True
 
     with torch.inference_mode():
         with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
