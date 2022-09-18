@@ -12,6 +12,10 @@ except ImportError:
 # http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz
 FID_WEIGHTS_URL = 'https://github.com/mseitzer/pytorch-fid/releases/download/fid_weights/pt_inception-2015-12-05-6726825d.pth'  # noqa: E501
 
+# torchvision version
+TV_VERSION = torchvision.__version__.split("+")[0]
+TV_VERSION = tuple(map(int, TV_VERSION.split(".")))
+
 
 class InceptionV3(nn.Module):
     """Pretrained InceptionV3 network returning feature maps"""
@@ -76,10 +80,12 @@ class InceptionV3(nn.Module):
 
         self.blocks = nn.ModuleList()
 
+        load_pretrained = {"pretrained": True} if TV_VERSION < (0, 13, 0) else \
+            {"weights": torchvision.models.Inception_V3_Weights.IMAGENET1K_V1}
         if use_fid_inception:
             inception = fid_inception_v3()
         else:
-            inception = _inception_v3(pretrained=True)
+            inception = _inception_v3(**load_pretrained)
 
         # Block 0: input to maxpool1
         block0 = [
@@ -190,9 +196,15 @@ def fid_inception_v3():
     This method first constructs torchvision's Inception and then patches the
     necessary parts that are different in the FID Inception model.
     """
-    inception = _inception_v3(num_classes=1008,
-                              aux_logits=False,
-                              pretrained=False)
+    # pretrained is deprecated since 0.13 and will be removed in 0.15
+
+    load_pretrained = {"pretrained": False} if TV_VERSION < (0, 13, 0) else {"weights": None}
+
+    inception = _inception_v3(
+        num_classes=1008,  # Why 1008? Check out https://github.com/tensorflow/tensorflow/issues/4128
+        aux_logits=False,
+        **load_pretrained
+    )
     inception.Mixed_5b = FIDInceptionA(192, pool_features=32)
     inception.Mixed_5c = FIDInceptionA(256, pool_features=64)
     inception.Mixed_5d = FIDInceptionA(288, pool_features=64)
