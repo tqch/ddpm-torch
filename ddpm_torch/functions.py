@@ -10,6 +10,12 @@ DEFAULT_DTYPE = torch.float32
 
 @torch.jit.script
 def get_timestep_embedding(timesteps, embed_dim: int, dtype: torch.dtype = DEFAULT_DTYPE):
+    """
+    Adapted from fairseq/fairseq/modules/sinusoidal_positional_embedding.py
+    The implementation is slightly different from the decription in Section 3.5 of [1]
+    [1] Vaswani, Ashish, et al. "Attention is all you need."
+     Advances in neural information processing systems 30 (2017).
+    """
     half_dim = embed_dim // 2
     embed = math.log(10000) / (half_dim - 1)
     embed = torch.exp(-torch.arange(half_dim, dtype=dtype, device=timesteps.device) * embed)
@@ -30,9 +36,13 @@ def normal_kl(mean1, logvar1, mean2, logvar2):
     return kl
 
 
+@torch.jit.script
 def approx_std_normal_cdf(x):
-    #  E. Page (1977)
-    # "Approximating to the Cumulative Normal function and its Inverse for use on a Pocket Calculator"
+    """
+    Reference:
+    Page, E. “Approximations to the Cumulative Normal Function and Its Inverse for Use on a Pocket Calculator.”
+     Applied Statistics 26.1 (1977): 75–76. Web.
+    """
     return 0.5 * (1. + torch.tanh(math.sqrt(2. / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
 

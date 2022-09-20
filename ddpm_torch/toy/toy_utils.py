@@ -23,9 +23,7 @@ class Trainer:
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             eval_intv=1,  # evaluate every {eval_intv} epochs
             chkpt_intv=10,  # save a checkpoint every {chkpt_intv} epochs
-
     ):
-
         self.model = model
         self.optimizer = optimizer
         self.diffusion = diffusion
@@ -41,13 +39,12 @@ class Trainer:
         self.eval_intv = eval_intv
         self.chkpt_intv = chkpt_intv
 
-        model.to(device)
         self.stats = RunningStatistics(loss=None)
 
     def loss(self, x):
         B = x.shape[0]
         T = self.diffusion.timesteps
-        t = torch.randint(T - 1, size=(B,), dtype=torch.int64, device=self.device)
+        t = torch.randint(T, size=(B, ), dtype=torch.int64, device=self.device)
         loss = self.diffusion.train_losses(self.model, x_0=x, t=t)
         assert loss.shape == (B, )
         return loss
@@ -55,7 +52,7 @@ class Trainer:
     def step(self, x):
         B = x.shape[0]
         loss = self.loss(x).mean()
-        self.optimizer.zero_grad()
+        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         # gradient clipping by global norm
         if self.grad_norm:
@@ -67,9 +64,8 @@ class Trainer:
 
         def sample_fn(n):
             shape = (n,) + self.shape
-            with torch.no_grad():
-                sample = self.diffusion.p_sample(
-                    denoise_fn=self.model, shape=shape, device=self.device, noise=None)
+            sample = self.diffusion.p_sample(
+                denoise_fn=self.model, shape=shape, device=self.device, noise=None)
             return sample.cpu().numpy()
 
         for e in range(self.start_epoch, self.epochs):
@@ -156,11 +152,10 @@ class Evaluator:
     def eval(self, sample_fn):
         x_gen = []
         gen_hist = 0
-        with torch.no_grad():
-            for _ in range(0, self.max_eval_count + self.eval_batch_size, self.eval_batch_size):
-                x_gen.append(sample_fn(self.eval_batch_size))
-                gen_hist += hist2d(
-                    x_gen[-1], bins=self.bins, value_range=self.value_range)
+        for _ in range(0, self.max_eval_count + self.eval_batch_size, self.eval_batch_size):
+            x_gen.append(sample_fn(self.eval_batch_size))
+            gen_hist += hist2d(
+                x_gen[-1], bins=self.bins, value_range=self.value_range)
         gen_hist /= np.sum(gen_hist) + self.eps
         return {
             "kld": discrete_klv2d(gen_hist, self.true_hist),

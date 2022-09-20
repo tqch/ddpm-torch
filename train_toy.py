@@ -27,13 +27,13 @@ if __name__ == "__main__":
     parser.add_argument("--model-mean-type", choices=["mean", "x_0", "eps"], default="eps", type=str)
     parser.add_argument("--model-var-type", choices=["learned", "fixed-small", "fixed-large"], default="fixed-large", type=str)
     parser.add_argument("--loss-type", choices=["kl", "mse"], default="mse", type=str)
-    parser.add_argument("--image-dir", default="./images", type=str)
+    parser.add_argument("--image-dir", default="./images/train", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
     parser.add_argument("--eval-intv", default=1, type=int)
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument("--resume", action="store_true", help="to resume from a checkpoint")
-    parser.add_argument("--gpu", default=0, type=int)
+    parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument("--mid-features", default=128, type=int)
     parser.add_argument("--num-temporal-layers", default=3, type=int)
 
@@ -52,7 +52,7 @@ if __name__ == "__main__":
     trainloader = DataStreamer(dataset, batch_size=batch_size, num_batches=num_batches)
 
     # training parameters
-    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.device)
     epochs = args.epochs
 
     # diffusion parameters
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     chkpt_dir = args.chkpt_dir
     if not os.path.exists(chkpt_dir):
         os.makedirs(chkpt_dir)
-    chkpt_path = os.path.join(chkpt_dir, f"{dataset}_diffusion.pt")
+    chkpt_path = os.path.join(chkpt_dir, f"ddpm_{dataset}.pt")
 
     # set up image directory
     image_dir = os.path.join(args.image_dir, f"{dataset}")

@@ -107,7 +107,7 @@ class InceptionStatistics(nn.Module):
 
     def forward(self, x):
         x = self.input_transform(x)
-        with torch.no_grad():
+        with torch.inference_mode():
             act = self.model(x)[0].cpu().numpy()
         if act.shape[2] != 1 or act.shape[3] != 1:
             act = adaptive_avg_pool2d(act, (1, 1))

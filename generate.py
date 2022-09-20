@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument("--eta", default=0., type=float)
     parser.add_argument("--skip-schedule", default="linear", type=str)
     parser.add_argument("--subseq-size", default=10, type=int)
-    parser.add_argument("--affix", default="", type=str)
+    parser.add_argument("--suffix", default="", type=str)
 
     args = parser.parse_args()
 
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         if p.requires_grad:
             p.requires_grad_(False)
 
-    folder_name = folder_name + args.affix
+    folder_name = folder_name + args.suffix
     save_dir = os.path.join(args.save_dir, folder_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -95,13 +95,12 @@ if __name__ == "__main__":
     if torch.backends.cudnn.is_available():
         torch.backends.cudnn.benchmark = True
 
-    with torch.inference_mode():
-        with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
-            for i in trange(num_eval_batches):
-                if i == num_eval_batches - 1:
-                    shape = (total_size - i * batch_size, 3, image_res, image_res)
-                    x = diffusion.p_sample(model, shape=shape, device=device, noise=torch.randn(shape, device=device)).cpu()
-                else:
-                    x = diffusion.p_sample(model, shape=shape, device=device, noise=torch.randn(shape, device=device)).cpu()
-                x = (x * 127.5 + 127.5).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).numpy()
-                pool.map(save_image, list(x))
+    with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
+        for i in trange(num_eval_batches):
+            if i == num_eval_batches - 1:
+                shape = (total_size - i * batch_size, 3, image_res, image_res)
+                x = diffusion.p_sample(model, shape=shape, device=device, noise=torch.randn(shape, device=device)).cpu()
+            else:
+                x = diffusion.p_sample(model, shape=shape, device=device, noise=torch.randn(shape, device=device)).cpu()
+            x = (x * 127.5 + 127.5).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).numpy()
+            pool.map(save_image, list(x))

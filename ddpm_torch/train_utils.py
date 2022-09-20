@@ -68,7 +68,6 @@ class Trainer:
             distributed=False,
             rank=0  # process id for distributed training
     ):
-        model.to(device)
         self.model = model
         self.optimizer = optimizer
         self.diffusion = diffusion
@@ -100,7 +99,7 @@ class Trainer:
     def loss(self, x):
         B = x.shape[0]
         T = self.diffusion.timesteps
-        t = torch.randint(T - 1, size=(B, ), dtype=torch.int64, device=self.device)
+        t = torch.randint(T, size=(B, ), dtype=torch.int64, device=self.device)
         loss = self.diffusion.train_losses(self.model, x_0=x, t=t)
         assert loss.shape == (B, )
         return loss
@@ -123,10 +122,10 @@ class Trainer:
         if diffusion is None:
             diffusion = self.diffusion
         shape = noise.shape
-        with torch.inference_mode():
-            with self.ema:
-                sample = diffusion.p_sample(
-                    denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
+        with self.ema:
+            sample = diffusion.p_sample(
+                denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
+        assert sample.grad is None
         return sample
 
     def train(self, evaluator=None, chkpt_path=None, image_dir=None):
@@ -155,9 +154,8 @@ class Trainer:
                         t.set_postfix(results)
             if self.is_main:
                 if num_samples and image_dir:
-                    with torch.no_grad():
-                        x = self.sample_fn(noise).cpu()
-                        save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
+                    x = self.sample_fn(noise).cpu()
+                    save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
                 if not (e + 1) % self.chkpt_intv and chkpt_path:
                     self.save_checkpoint(chkpt_path, epoch=e+1, **results)
             if self.distributed:
@@ -214,10 +212,8 @@ class Evaluator:
 
     def eval(self, sample_fn):
         self.istats.reset()
-        with torch.no_grad():
-            for _ in range(0, self.max_eval_count + self.eval_batch_size, self.eval_batch_size):
-                with torch.inference_mode():
-                    x = sample_fn(self.eval_batch_size, diffusion=self.diffusion)
-                self.istats(x.to(self.device))
+        for _ in range(0, self.max_eval_count + self.eval_batch_size, self.eval_batch_size):
+            x = sample_fn(self.eval_batch_size, diffusion=self.diffusion)
+            self.istats(x.to(self.device))
         gen_mean, gen_var = self.istats.get_statistics()
         return {"fid": calc_fd(gen_mean, gen_var, self.target_mean, self.target_var)}

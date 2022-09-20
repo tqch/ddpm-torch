@@ -44,8 +44,7 @@ class GaussianDiffusion:
         self.model_var_type = model_var_type
         self.loss_type = loss_type
 
-        timesteps = len(betas)
-        self.timesteps = timesteps
+        self.timesteps = len(betas)
 
         alphas = 1 - betas
         self.alphas_bar = np.cumprod(alphas)
@@ -163,6 +162,7 @@ class GaussianDiffusion:
         sample = model_mean + nonzero_mask * torch.exp(0.5 * model_logvar) * noise
         return (sample, pred_x_0) if return_pred else sample
 
+    @torch.inference_mode()
     def p_sample(self, denoise_fn, shape, device=torch.device("cpu"), noise=None):
         B, *_ = shape
         t = torch.empty((B, ), dtype=torch.int64, device=device)
@@ -175,24 +175,23 @@ class GaussianDiffusion:
             x_t = self.p_sample_step(denoise_fn, x_t, t)
         return x_t
 
+    @torch.inference_mode()
     def p_sample_progressive(self, denoise_fn, shape, device=torch.device("cpu"), noise=None, pred_freq=50):
         B, *_ = shape
         t = torch.empty(B, dtype=torch.int64, device=device)
-        t.fill_(self.timesteps - 1)
         if noise is None:
             x_t = torch.randn(shape, device=device)
         else:
             x_t = noise.to(device)
         L = self.timesteps // pred_freq
-        preds = torch.zeros((B, L,) + shape[1:], dtype=torch.float32)
+        preds = torch.zeros((B, L) + shape[1:], dtype=torch.float32)
         idx = L
-        with torch.no_grad():
-            for i in range(self.timesteps - 1, -1, -1):
-                x_t, pred = self.p_sample_step(denoise_fn, x_t, t, return_pred=True)
-                t -= 1
-                if (i + 1) % pred_freq == 0:
-                    idx -= 1
-                    preds[:, idx] = pred.cpu()
+        for ti in range(self.timesteps - 1, -1, -1):
+            t.fill_(ti)
+            x_t, pred = self.p_sample_step(denoise_fn, x_t, t, return_pred=True)
+            if (ti + 1) % pred_freq == 0:
+                idx -= 1
+                preds[:, idx] = pred.cpu()
         return x_t.cpu(), preds
 
     # === log likelihood ===

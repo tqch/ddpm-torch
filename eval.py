@@ -79,9 +79,8 @@ if __name__ == "__main__":
         istats = InceptionStatistics(device=device, input_transform=lambda im: (im-127.5) / 127.5)
         true_mean, true_var = get_precomputed(dataset, download_dir=precomputed_dir)
         istats.reset()
-        with torch.inference_mode():
-            for x in tqdm(imageloader, desc="Computing Inception statistics"):
-                istats(x.to(device))
+        for x in tqdm(imageloader, desc="Computing Inception statistics"):
+            istats(x.to(device))
         gen_mean, gen_var = istats.get_statistics()
         fid = calc_fd(gen_mean, gen_var, true_mean, true_var)
         return fid

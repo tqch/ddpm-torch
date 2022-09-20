@@ -18,7 +18,7 @@ usage: train_toy.py [-h] [--dataset {gaussian8,gaussian25,swissroll}]
                     [--loss-type {kl,mse}] [--image-dir IMAGE_DIR]
                     [--chkpt-dir CHKPT_DIR] [--chkpt-intv CHKPT_INTV]
                     [--eval-intv EVAL_INTV] [--seed SEED] [--resume]
-                    [--gpu GPU] [--mid-features MID_FEATURES]
+                    [--device DEVICE] [--mid-features MID_FEATURES]
                     [--num-temporal-layers NUM_TEMPORAL_LAYERS]
 optional arguments:
   -h, --help            show this help message and exit
@@ -47,7 +47,7 @@ optional arguments:
   --eval-intv EVAL_INTV
   --seed SEED           random seed
   --resume              to resume from a checkpoint
-  --gpu GPU
+  --device DEVICE
   --mid-features MID_FEATURES
   --num-temporal-layers NUM_TEMPORAL_LAYERS
 </code></pre>
@@ -110,8 +110,8 @@ optional arguments:
 
 ### Examples
 ```shell
-# train a 25-Gaussian toy model on cuda:0 for a total of 100 epochs
-python train_toy.py --dataset gaussian8 --gpu 0 --epochs 100
+# train a 25-Gaussian toy model with single gpu for a total of 100 epochs
+python train_toy.py --dataset gaussian8 --device cuda:0 --epochs 100
 
 # train a cifar10 model with single gpu for a total of 50 epochs
 python train.py --dataset cifar10 --train-device cuda:0 --epochs 50
