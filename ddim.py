@@ -59,7 +59,7 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         # q(x_t|x_0)
         # re-parameterization: x_t(x_0, \epsilon_t)
         self.sqrt_alphas_bar = np.sqrt(self.alphas_bar)
-        self.sqrt_one_minus_alphas_bar = np.sqrt(1./self.alphas_bar - 1.)
+        self.sqrt_one_minus_alphas_bar = np.sqrt(1. - self.alphas_bar)
 
         self.posterior_var = self.betas * (1. - self.alphas_bar_prev) / (1. - self.alphas_bar) * eta2
         self.posterior_logvar_clipped = np.log(np.concatenate([

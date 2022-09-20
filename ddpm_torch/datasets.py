@@ -86,9 +86,13 @@ class CelebA(datasets.VisionDataset):
 DATA_INFO = {
     "mnist": {
         "data": datasets.MNIST,
-        "resolution": (28, 28),
+        "resolution": (32, 32),
         "channels": 1,
-        "transform": transforms.ToTensor(),
+        "transform": transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, ), (0.5, ))
+        ]),
         "train_size": 60000,
         "test_size": 10000
     },
