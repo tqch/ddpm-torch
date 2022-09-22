@@ -21,6 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval-device", default=0, type=int)
     parser.add_argument("--eval-batch-size", default=512, type=int)
     parser.add_argument("--eval-total-size", default=50000, type=int)
+    parser.add_argument("--num-workers", default=4, type=int)
     parser.add_argument("--nhood-size", default=3, type=int)
     parser.add_argument("--row-batch-size", default=10000, type=int)
     parser.add_argument("--col-batch-size", default=10000, type=int)
@@ -48,6 +49,7 @@ if __name__ == "__main__":
     precomputed_dir = args.precomputed_dir
     eval_batch_size = args.eval_batch_size
     eval_total_size = args.eval_total_size
+    num_workers = args.num_workers
 
 
     class ImageFolder(Dataset):
@@ -72,7 +74,8 @@ if __name__ == "__main__":
         inds = torch.as_tensor(np.random.choice(len(imagefolder), size=eval_total_size, replace=False))
         imagefolder = Subset(imagefolder, indices=inds)
     imageloader = DataLoader(
-        imagefolder, batch_size=eval_batch_size, shuffle=False, drop_last=False, pin_memory=True)
+        imagefolder, batch_size=eval_batch_size, shuffle=False,
+        num_workers=num_workers, drop_last=False, pin_memory=True)
 
 
     def eval_fid():
@@ -95,7 +98,8 @@ if __name__ == "__main__":
         str_fmt = f".{decimal_places}f"
         _ManifoldBuilder = partial(
             ManifoldBuilder, extr_batch_size=eval_batch_size, max_sample_size=eval_total_size,
-            row_batch_size=row_batch_size, col_batch_size=col_batch_size, nhood_size=nhood_size, device=device)
+            row_batch_size=row_batch_size, col_batch_size=col_batch_size, nhood_size=nhood_size,
+            num_workers=num_workers, device=device)
         manifold_path = os.path.join(precomputed_dir, f"pr_manifold_{dataset}.pt")
         if not os.path.exists(manifold_path):
             dataset_kwargs = {

@@ -78,6 +78,7 @@ class ManifoldBuilder:
             row_batch_size=10000,
             col_batch_size=10000,
             random_state=1234,
+            num_workers=0,
             device=torch.device("cpu")  # set to cuda if available for the best performance
     ):
         if features is None:
@@ -92,7 +93,8 @@ class ManifoldBuilder:
 
                     def dataloader():
                         _dataloader = DataLoader(
-                            data, batch_size=extr_batch_size, shuffle=False, drop_last=False, pin_memory=True)
+                            data, batch_size=extr_batch_size, shuffle=False,
+                            num_workers=num_workers, drop_last=False, pin_memory=True)
                         for x in _dataloader:
                             if isinstance(x, (list, tuple)):
                                 yield x[0]

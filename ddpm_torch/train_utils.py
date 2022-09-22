@@ -10,10 +10,16 @@ import torch.distributed as dist
 
 
 class DummyScheduler:
-    def init(self): pass
-    def step(self): pass
-    def load_state_dict(self, state_dict): pass
-    def state_dict(self): return None
+    @staticmethod
+    def step():
+        pass
+
+    def load_state_dict(self, state_dict):
+        pass
+
+    @staticmethod
+    def state_dict():
+        return None
 
 
 class RunningStatistics:
@@ -78,7 +84,7 @@ class Trainer:
         if shape is None:
             shape = next(iter(trainloader))[0].shape[1:]
         self.shape = shape
-        self.scheduler = scheduler
+        self.scheduler = DummyScheduler() if scheduler is None else scheduler
         self.use_ema = use_ema
         if use_ema:
             self.ema = EMA(self.model, decay=ema_decay)

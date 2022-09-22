@@ -3,8 +3,8 @@ import torch
 import numpy as np
 from torch.optim import Adam, lr_scheduler
 from ddpm_torch.utils import seed_all, infer_range
-from ddpm_torch.train_utils import DummyScheduler
 from ddpm_torch.toy import *
+
 
 if __name__ == "__main__":
     import argparse
@@ -71,6 +71,7 @@ if __name__ == "__main__":
     out_features = 2 * in_features if model_var_type == "learned" else in_features
     mid_features = args.mid_features
     model = Decoder(in_features, mid_features, args.num_temporal_layers)
+    model.to(device)
 
     # training parameters
     lr = args.lr
@@ -89,12 +90,9 @@ if __name__ == "__main__":
         os.makedirs(image_dir)
 
     # scheduler
-    warmup_epochs = args.lr_warmup
-    if warmup_epochs:
-        lr_lambda = lambda t: min((t + 1) / warmup_epochs, 1.0)
-        scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
-    else:
-        scheduler = DummyScheduler()
+    warmup = args.lr_warmup
+    scheduler = lr_scheduler.LambdaLR(
+        optimizer, lr_lambda=lambda t: min((t + 1) / warmup, 1.0)) if warmup > 0 else None
 
     # load trainer
     grad_norm = 0  # gradient global clipping is disabled

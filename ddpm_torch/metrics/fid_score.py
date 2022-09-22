@@ -112,13 +112,13 @@ class InceptionStatistics(nn.Module):
         if act.shape[2] != 1 or act.shape[3] != 1:
             act = adaptive_avg_pool2d(act, (1, 1))
         act = act.squeeze(-1).squeeze(-1)
-        mean = np.mean(act, axis=0)
-        var = np.cov(act, rowvar=False, ddof=0)
+        mean = np.mean(act, axis=0, dtype=np.float64)
+        var = np.cov(act, rowvar=False, ddof=0, dtype=np.float64)
         count = act.shape[0]
         alpha = count / (self.count + count)
         if self.count == 0:
-            self.running_mean = mean
-            self.running_var = var
+            self.running_mean += mean
+            self.running_var += var
         else:
             mean_diff = (mean - self.running_mean)
             self.running_mean += alpha * mean_diff

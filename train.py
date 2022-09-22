@@ -80,7 +80,8 @@ def main(args):
     optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
     # Note1: lr_lambda is used to calculate the **multiplicative factor**
     # Note2: index starts at 0
-    scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda t: min((t + 1) / warmup, 1.0))
+    scheduler = lr_scheduler.LambdaLR(
+        optimizer, lr_lambda=lambda t: min((t + 1) / warmup, 1.0)) if warmup > 0 else None
 
     split = "all" if dataset == "celeba" else "train"
     num_workers = args.num_workers

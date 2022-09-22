@@ -5,7 +5,7 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from ..functions import discrete_klv2d, hist2d
-from ..train_utils import RunningStatistics
+from ..train_utils import DummyScheduler, RunningStatistics
 from ..utils import save_scatterplot
 
 
@@ -33,7 +33,7 @@ class Trainer:
         if shape is None:
             shape = next(iter(trainloader)).shape[1:]
         self.shape = tuple(shape)
-        self.scheduler = scheduler
+        self.scheduler = DummyScheduler() if scheduler is None else scheduler
         self.grad_norm = grad_norm
         self.device = device
         self.eval_intv = eval_intv
