@@ -9,14 +9,12 @@ class GaussianDiffusion(diffusion.GaussianDiffusion):
     def q_sample(self, x_0, t, noise=None):
         if noise is None:
             noise = torch.randn_like(x_0)
-        ndim = x_0.ndim
-        coef1 = self._extract(self.sqrt_alphas_bar, t, ndim=ndim).to(x_0.device)
-        coef2 = self._extract(self.sqrt_one_minus_alphas_bar, t, ndim=ndim).to(x_0.device)
+        coef1 = self._extract(self.sqrt_alphas_bar, t, x_0)
+        coef2 = self._extract(self.sqrt_one_minus_alphas_bar, t, x_0)
         return coef1 * x_0 + coef2 * noise
 
     def p_mean_var(self, denoise_fn, x_t, t, clip_denoised, return_pred):
         B, D = x_t.shape
-        ndim = x_t.ndim
         out = denoise_fn(x_t, t)
 
         if self.model_var_type == "learned":
@@ -24,9 +22,8 @@ class GaussianDiffusion(diffusion.GaussianDiffusion):
             out, model_logvar = out.chunk(2, dim=1)
             model_var = torch.exp(model_logvar)
         elif self.model_var_type in ["fixed-small", "fixed-large"]:
-            model_var, model_logvar = self._extract(self.fixed_model_var, t, ndim=ndim),\
-                                      self._extract(self.fixed_model_logvar, t, ndim=ndim)
-            model_var, model_logvar = model_var.to(x_t.device), model_logvar.to(x_t.device)
+            model_var, model_logvar = self._extract(self.fixed_model_var, t, x_t),\
+                                      self._extract(self.fixed_model_logvar, t, x_t)
         else:
             raise NotImplementedError(self.model_var_type)
 

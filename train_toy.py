@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
     parser.add_argument("--eval-intv", default=1, type=int)
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
-    parser.add_argument("--resume", action="store_true", help="to resume from a checkpoint")
+    parser.add_argument("--resume", action="store_true", help="to resume training from a checkpoint")
     parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument("--mid-features", default=128, type=int)
     parser.add_argument("--num-temporal-layers", default=3, type=int)
@@ -124,7 +124,7 @@ if __name__ == "__main__":
 
     if args.resume:
         try:
-            trainer.resume_from_chkpt(chkpt_path)
+            trainer.load_checkpoint(chkpt_path)
         except FileNotFoundError:
             print("Checkpoint file does not exist!")
             print("Starting from scratch...")

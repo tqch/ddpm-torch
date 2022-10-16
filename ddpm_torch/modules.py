@@ -2,13 +2,24 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from collections.abc import Iterable
+from itertools import repeat
 
 DEFAULT_DTYPE = torch.float32
 DEFAULT_INITIALIZER = lambda x, scale=1.: nn.init.xavier_uniform_(x, gain=(scale or 1e-10))
 
 
-def pair(x):
-    return x, x
+def ntuple(n, name="parse"):
+    def parse(x):
+        if isinstance(x, Iterable):
+            return tuple(x)
+        else:
+            return tuple(repeat(x, n))
+    parse.__name__ = name
+    return parse
+
+
+pair = ntuple(2, "pair")
 
 
 class Linear(nn.Module):
@@ -40,8 +51,7 @@ class Linear(nn.Module):
 
     def extra_repr(self):
         return 'in_features={}, out_features={}, bias={}'.format(
-            self.in_features, self.out_features, self.bias is not None
-        )
+            self.in_features, self.out_features, self.bias is not None)
 
 
 class Conv2d(nn.Module):
@@ -61,16 +71,16 @@ class Conv2d(nn.Module):
         super(Conv2d, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        kernel_size = pair(kernel_size)
+        self.kernel_size = kernel_size = pair(kernel_size)
         self.weight = nn.Parameter(
-            torch.empty(
-                (out_channels, in_channels // groups, kernel_size[0], kernel_size[1]), dtype=DEFAULT_DTYPE))
+            torch.empty((
+                out_channels, in_channels // groups, kernel_size[0], kernel_size[1]
+            ), dtype=DEFAULT_DTYPE))
         if bias:
             self.bias = nn.Parameter(torch.empty((out_channels, ), dtype=DEFAULT_DTYPE))
         else:
             self.register_parameter("bias", None)
-        self.kernel_size = kernel_size
-        self.stride = stride
+        self.stride = pair(stride)
         self.padding = padding if isinstance(padding, str) else pair(padding)
         self.dilation = pair(dilation)
         self.groups = groups
@@ -107,18 +117,18 @@ class Conv2d(nn.Module):
 class ValidPad2d(nn.Module):
     def __init__(self, kernel_size, stride, mode="constant", value=0.0):
         super(ValidPad2d, self).__init__()
-        self.kernel_size = pair(kernel_size) if isinstance(kernel_size, int) else kernel_size
-        self.stride = pair(stride) if isinstance(kernel_size, int) else stride
+        self.kernel_size = pair(kernel_size)
+        self.stride = pair(stride)
         self.mode = mode
         self.value = value
 
     def forward(self, x):
         _, _, h, w = x.shape
         (k1, k2), (s1, s2) = self.kernel_size, self.stride
-        h_pad = s1 * math.ceil((h-k1+1)/s1 - 1) + k1 - h
-        top_pad, bottom_pad = [math.floor(h_pad/2), math.ceil(h_pad/2)] if h_pad else (0, 0)
-        w_pad = s2 * math.ceil((w-k2+1)/s2 - 1) + k2 - w
-        left_pad, right_pad = [math.floor(w_pad/2), math.ceil(w_pad/2)] if w_pad else (0, 0)
+        h_pad, w_pad = s1 * math.ceil((h - k1 + 1) / s1 - 1) + k1 - h, \
+                       s2 * math.ceil((w - k2 + 1) / s2 - 1) + k2 - w
+        top_pad, bottom_pad = (math.floor(h_pad / 2), math.ceil(h_pad / 2)) if h_pad else (0, 0)
+        left_pad, right_pad = (math.floor(w_pad / 2), math.ceil(w_pad / 2)) if w_pad else (0, 0)
         x = F.pad(x, pad=(left_pad, right_pad, top_pad, bottom_pad), mode=self.mode, value=self.value)
         return x
 
@@ -126,18 +136,17 @@ class ValidPad2d(nn.Module):
 class SamePad2d(nn.Module):
     def __init__(self, kernel_size, stride, mode="constant", value=0.0):
         super(SamePad2d, self).__init__()
-        self.kernel_size = pair(kernel_size) if isinstance(kernel_size, int) else kernel_size
-        self.stride = pair(stride) if isinstance(kernel_size, int) else stride
+        self.kernel_size = pair(kernel_size)
+        self.stride = pair(stride)
         self.mode = mode
         self.value = value
 
     def forward(self, x):
         _, _, h, w = x.shape
         (k1, k2), (s1, s2) = self.kernel_size, self.stride
-        h_pad = s1 * math.ceil(h/s1 - 1) + k1 - h
-        top_pad, bottom_pad = [math.floor(h_pad/2), math.ceil(h_pad/2)] if h_pad else (0, 0)
-        w_pad = s2 * math.ceil(w/s2 - 1) + k2 - w
-        left_pad, right_pad = [math.floor(w_pad/2), math.ceil(w_pad/2)] if w_pad else (0, 0)
+        h_pad, w_pad = s1 * math.ceil(h / s1 - 1) + k1 - h, s2 * math.ceil(w / s2 - 1) + k2 - w
+        top_pad, bottom_pad = (math.floor(h_pad / 2), math.ceil(h_pad / 2)) if h_pad else (0, 0)
+        left_pad, right_pad = (math.floor(w_pad / 2), math.ceil(w_pad / 2)) if w_pad else (0, 0)
         x = F.pad(x, pad=(left_pad, right_pad, top_pad, bottom_pad), mode=self.mode, value=self.value)
         return x
 

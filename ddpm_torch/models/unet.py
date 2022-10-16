@@ -6,7 +6,11 @@ from ..functions import get_timestep_embedding
 
 
 DEFAULT_NONLINEARITY = nn.SiLU()  # f(x)=x*sigmoid(x)
-DEFAULT_NORMALIZER = nn.GroupNorm
+
+
+class DEFAULT_NORMALIZER(nn.GroupNorm):
+    def __init__(self, num_channels, num_groups=32):
+        super().__init__(num_groups=num_groups, num_channels=num_channels)
 
 
 class AttentionBlock(nn.Module):
@@ -21,6 +25,7 @@ class AttentionBlock(nn.Module):
         super(AttentionBlock, self).__init__()
         mid_channels = mid_channels or in_channels
         out_channels = out_channels or in_channels
+        self.norm = self.normalize(in_channels)
         self.project_in = Conv2d(in_channels, 3 * mid_channels, 1)
         self.project_out = Conv2d(mid_channels, out_channels, 1, init_scale=0.)
         self.in_channels = in_channels
@@ -41,7 +46,7 @@ class AttentionBlock(nn.Module):
         skip = self.skip(x)
         C = x.shape[1]
         assert C == self.in_channels
-        q, k, v = self.project_in(x).chunk(3, dim=1)
+        q, k, v = self.project_in(self.norm(x)).chunk(3, dim=1)
         x = self.qkv(q, k, v)
         x = self.project_out(x)
         return x + skip
@@ -56,14 +61,13 @@ class ResidualBlock(nn.Module):
             in_channels,
             out_channels,
             embed_dim,
-            num_groups=32,
             drop_rate=0.5
     ):
         super(ResidualBlock, self).__init__()
-        self.norm1 = self.normalize(num_groups, in_channels)
+        self.norm1 = self.normalize(in_channels)
         self.conv1 = Conv2d(in_channels, out_channels, 3, 1, 1)
         self.fc = Linear(embed_dim, out_channels)
-        self.norm2 = self.normalize(num_groups, out_channels)
+        self.norm2 = self.normalize(out_channels)
         self.conv2 = Conv2d(out_channels, out_channels, 3, 1, 1, init_scale=0.)
         self.skip = nn.Identity() if in_channels == out_channels else Conv2d(in_channels, out_channels, 1)
         self.dropout = nn.Dropout(p=drop_rate, inplace=True)
@@ -90,7 +94,6 @@ class UNet(nn.Module):
             num_res_blocks,
             apply_attn,
             time_embedding_dim=None,
-            num_groups=32,
             drop_rate=0.,
             resample_with_conv=True
     ):
@@ -125,7 +128,7 @@ class UNet(nn.Module):
         )
         self.upsamples = nn.ModuleDict({f"level_{i}": self.upsample_level(i) for i in range(levels)})
         self.out_conv = Sequential(
-            self.normalize(num_groups, hid_channels),
+            self.normalize(hid_channels),
             self.nonlinearity,
             Conv2d(hid_channels, out_channels, 3, 1, 1, init_scale=0.)
         )
@@ -137,8 +140,7 @@ class UNet(nn.Module):
             def block(in_chans, out_chans):
                 return Sequential(
                     ResidualBlock(in_chans, out_chans, embed_dim=embed_dim, drop_rate=drop_rate),
-                    AttentionBlock(out_chans)
-                )
+                    AttentionBlock(out_chans))
         else:
             def block(in_chans, out_chans):
                 return ResidualBlock(in_chans, out_chans, embed_dim=embed_dim, drop_rate=drop_rate)
@@ -155,8 +157,7 @@ class UNet(nn.Module):
             if self.resample_with_conv:
                 downsample = Sequential(
                     SamePad2d(3, 2),
-                    Conv2d(curr_chans, curr_chans, 3, 2)
-                )
+                    Conv2d(curr_chans, curr_chans, 3, 2))
             else:
                 downsample = nn.AvgPool2d(2)
             modules.append(downsample)

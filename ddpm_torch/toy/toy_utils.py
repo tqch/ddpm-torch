@@ -103,7 +103,7 @@ class Trainer:
         return ["model", "optimizer"] + [
             "scheduler", ] if self.scheduler is not None else []
 
-    def resume_from_chkpt(self, chkpt_path):
+    def load_checkpoint(self, chkpt_path):
         chkpt = torch.load(chkpt_path, map_location=self.device)
         self.model.load_state_dict(chkpt["model"])
         self.optimizer.load_state_dict(chkpt["optimizer"])

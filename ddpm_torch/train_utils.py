@@ -1,4 +1,5 @@
 import os
+import re
 import torch
 import torch.nn as nn
 from .utils import save_image, EMA
@@ -69,6 +70,7 @@ class Trainer:
             shape=None,
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
             chkpt_intv=5,  # save a checkpoint every {chkpt_intv} epochs
+            image_intv=1,  # generate images every {image_intv} epochs
             num_save_images=64,
             ema_decay=0.9999,
             distributed=False,
@@ -85,20 +87,22 @@ class Trainer:
             shape = next(iter(trainloader))[0].shape[1:]
         self.shape = shape
         self.scheduler = DummyScheduler() if scheduler is None else scheduler
-        self.use_ema = use_ema
-        if use_ema:
-            self.ema = EMA(self.model, decay=ema_decay)
-        else:
-            self.ema = nullcontext()
+
         self.grad_norm = grad_norm
         self.device = device
         self.chkpt_intv = chkpt_intv
+        self.image_intv = image_intv
         self.num_save_images = num_save_images
 
         if distributed:
             assert sampler is not None
         self.distributed = distributed
         self.is_main = rank == 0
+        self.use_ema = use_ema
+        if self.is_main and use_ema:
+            self.ema = EMA(self.model, decay=ema_decay)
+        else:
+            self.ema = nullcontext()
 
         self.stats = RunningStatistics(loss=None)
 
@@ -120,7 +124,7 @@ class Trainer:
         self.optimizer.step()
         # adjust learning rate every step (warming up)
         self.scheduler.step()
-        if self.use_ema:
+        if self.is_main and self.use_ema:
             self.ema.update()
         self.stats.update(B, loss=loss.item() * B)
 
@@ -159,7 +163,7 @@ class Trainer:
                         results.update(eval_results)
                         t.set_postfix(results)
             if self.is_main:
-                if num_samples and image_dir:
+                if not (e + 1) % self.image_intv and num_samples and image_dir:
                     x = self.sample_fn(noise).cpu()
                     save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
                 if not (e + 1) % self.chkpt_intv and chkpt_path:
@@ -180,10 +184,19 @@ class Trainer:
     def current_stats(self):
         return self.stats.extract()
 
-    def resume_from_chkpt(self, chkpt_path, map_location):
+    def load_checkpoint(self, chkpt_path, map_location):
         chkpt = torch.load(chkpt_path, map_location=map_location)
         for trainee in self.trainees:
-            getattr(self, trainee).load_state_dict(chkpt[trainee])
+            try:
+                getattr(self, trainee).load_state_dict(chkpt[trainee])
+            except RuntimeError:
+                _chkpt = chkpt[trainee]["shadow"] if trainee == "ema" else chkpt[trainee]
+                for k in list(_chkpt.keys()):
+                    if k.split(".")[0] == "module":
+                        _chkpt[".".join(k.split(".")[1:])] = _chkpt.pop(k)
+                getattr(self, trainee).load_state_dict(chkpt[trainee])
+            except AttributeError:
+                continue
         self.start_epoch = chkpt["epoch"]
 
     def save_checkpoint(self, chkpt_path, **extra_info):
@@ -192,6 +205,8 @@ class Trainer:
             chkpt.append((k, v))
         for k, v in extra_info.items():
             chkpt.append((k, v))
+        if "epoch" in extra_info:
+            chkpt_path = re.sub(r"(_\d+)?\.pt", f"_{extra_info['epoch']}.pt", chkpt_path)
         torch.save(dict(chkpt), chkpt_path)
 
     def named_state_dicts(self):

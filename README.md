@@ -161,25 +161,23 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 
 |Dataset|FID (↓)|Precision (↑)|Recall (↑)|Training steps|Training loss|
 |:---:|:---:|:---:|:---:|:---:|:---:|
-|CIFAR-10|11.32|0.732|0.422|46.8k|0.0301|
-|\|__|6.49|0.732|0.474|93.6k|0.0293|
-|\|__|5.10|0.727|0.502|140.4k|0.0290|
-|\|__|4.43|0.727|0.518|187.2k|0.0285|
-|\|__|4.13|0.732|0.526|234.0k|0.0285|
-|\|__|3.88|0.729|**0.527**|280.8k|0.0286|
-|\|__|3.99|0.736|0.523|327.6k|0.0286|
-|\|__|3.95|0.737|0.523|374.4k|**0.0283**|
-|\|__|**3.83**|**0.743**|0.526|421.2k|0.0283|
-|CelebA|5.38|**0.782**|0.459|158.2k|0.0156|
-|\|__|**4.27**|0.769|**0.500**|316.4k|**0.0151**|
+|CIFAR-10|9.23|0.692|0.473|46.8k|0.0302|
+|\|__|  6.02   |     0.693     |   0.510    |93.6k|0.0291|
+|\|__|  4.04   |     0.701     |   0.550    |234.0k|0.0298|
+|\|__|  3.36   |     0.717     |   **0.559**   |468.0k|0.0284|
+|\|__| **3.25** | **0.736** | 0.548 |842.4k|**0.0277**|
+|CelebA| 4.81 | **0.766** | 0.490 |189.8k|0.0153|
+|\|__| 3.88 | 0.760 | 0.516 |379.7k|0.0151|
+|\|__| **3.07** | 0.754 | **0.540** |949.2k|**0.0147**|
 
 
-#### CIFAR-10 [[checkpoint]](https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_cifar10_1080.pt)
+#### CIFAR-10 [[checkpoint]](https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_cifar10_2160.pt)
 
 <details>
-	<summary>Training samples (1080 epochs)</summary>
+	<summary>Training process</summary>
+	(2160 epochs)
 	<p align="center">
-    	<img alt="cifar10_train_100" src="./assets/cifar10_train_1080.webp" /> 
+    	<img alt="cifar10_train_2160" src="./assets/cifar10_train_2160.webp" /> 
     </p>
 </details>
 
@@ -190,12 +188,13 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 	</p>
 </details>
 
-#### CelebA [[checkpoint]](https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_celeba_200.pt)
+#### CelebA [[checkpoint]](https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_celeba_600.pt)
 
 <details>
-	<summary>Training samples (200 epochs)</summary>
+	<summary>Training process</summary>
+	(600 epochs)
 	<p align="center">
-    	<img alt="cifar10_train_100" src="./assets/celeba_train_200.webp" /> 
+    	<img alt="cifar10_train_100" src="./assets/celeba_train_600.webp" /> 
     </p>
 </details>
 

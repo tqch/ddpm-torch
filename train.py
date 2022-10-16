@@ -106,16 +106,18 @@ def main(args):
     with open(os.path.join(chkpt_dir, f"exp_{timestamp}.info"), "w") as f:
         f.write(hps_info)
 
-    chkpt_path = os.path.join(chkpt_dir, f"ddpm_{dataset}.pt")
+    chkpt_path = os.path.join(chkpt_dir, args.chkpt_name or f"ddpm_{dataset}.pt")
     chkpt_intv = args.chkpt_intv
     logger(f"Checkpoint will be saved to {os.path.abspath(chkpt_path)}", end=" ")
-    logger(f"every {chkpt_intv} epochs")
+    logger(f"every {chkpt_intv} epoch(s)")
 
     image_dir = os.path.join(args.image_dir, f"{dataset}")
     if not os.path.exists(image_dir):
         os.makedirs(image_dir)
+    image_intv = args.image_intv
     num_save_images = args.num_save_images
-    logger(f"Generated images (x{num_save_images}) will be saved to {os.path.abspath(image_dir)}")
+    logger(f"Generated images (x{num_save_images}) will be saved to {os.path.abspath(image_dir)}", end=" ")
+    logger(f"every {image_intv} epoch(s)")
 
     trainer = Trainer(
         model=model,
@@ -130,6 +132,7 @@ def main(args):
         shape=image_shape,
         device=train_device,
         chkpt_intv=chkpt_intv,
+        image_intv=image_intv,
         num_save_images=num_save_images,
         ema_decay=args.ema_decay,
         rank=rank,
@@ -141,7 +144,7 @@ def main(args):
     if resume:
         try:
             map_location = {"cuda:0": f"cuda:{local_rank}"} if distributed else train_device
-            trainer.resume_from_chkpt(chkpt_path, map_location=map_location)
+            trainer.load_checkpoint(chkpt_path, map_location=map_location)
         except FileNotFoundError:
             logger("Checkpoint file does not exist!")
             logger("Starting from scratch...")
@@ -177,12 +180,14 @@ if __name__ == "__main__":
     parser.add_argument("--train-device", default="cuda:0", type=str)
     parser.add_argument("--eval-device", default="cuda:0", type=str)
     parser.add_argument("--image-dir", default="./images/train", type=str)
+    parser.add_argument("--image-intv", default=1, type=int)
     parser.add_argument("--num-save-images", default=64, type=int, help="number of images to generate & save")
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
+    parser.add_argument("--chkpt-name", default="", type=str)
     parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
-    parser.add_argument("--resume", action="store_true", help="to resume from a checkpoint")
+    parser.add_argument("--resume", action="store_true", help="to resume training from a checkpoint")
     parser.add_argument("--eval", action="store_true", help="whether to evaluate fid during training")
     parser.add_argument("--use-ema", action="store_true", help="whether to use exponential moving average")
     parser.add_argument("--ema-decay", default=0.9999, type=float, help="decay factor of ema")
