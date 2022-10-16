@@ -6,6 +6,22 @@
 
 # PyTorch Implementation of Denoising Diffusion Probabilistic Models [[paper]](https://arxiv.org/abs/2006.11239) [[official repo]](https://github.com/hojonathanho/diffusion)
 
+## Features
+
+- [x] Original DDPM[^1] training & sampling
+- [x] DDIM[^2] sampler
+- [x] Standard evaluation metrics
+	- [x] Fréchet Inception Distance[^3] (FID)
+	- [x] Precision & Recall[^4]
+- [x] Distributed Data Parallel[^5] (DDP) multi-GPU training
+
+## Requirements
+
+- torch >= 1.12.0
+- torchvision >= 1.13.0
+- scipy >= 1.7.3
+
+
 ## Code usage
 
 ### Toy data
@@ -133,7 +149,7 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 #### 8 Gaussian
 
 <details>
-	<summary>Animation</summary>
+	<summary>Training process</summary>
 	<p align="center"> 
 		<img alt="gaussian8" src="./assets/gaussian8.webp" height=360 width=360 /> 
 	</p>
@@ -141,7 +157,7 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 
 #### 25 Gaussian
 <details>
-	<summary>Animation</summary>
+	<summary>Training process</summary>
 	<p align="center"> 
 		<img alt="gaussian25" src="./assets/gaussian25.webp" height=360 width=360 /> 
 	</p>
@@ -149,7 +165,7 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 
 #### Swiss Roll
 <details>
-	<summary>Animation</summary>
+	<summary>Training process</summary>
 	<p align="center">
     	<img alt="swissroll" src="./assets/swissroll.webp" height=360 width=360 /> 
     </p>
@@ -205,19 +221,10 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 	</p>
 </details>
 
-## Reference formulae
+## References
 
-### Posterior mean and variance
-
-- (Predict $x\_{t-1}$ from $x\_t, x\_0$) 
-
-$$ x\_{t-1} \mid x\_t, x\_0 \sim \text{N}\left(\frac{\sqrt{\alpha\_t}(1-\bar{\alpha}\_{t-1})}{1-\bar{\alpha}\_t}x\_t+\frac{\sqrt{\alpha\_{t-1}}\beta\_t}{1-\bar{\alpha}\_t}x\_0, \sigma\_t^2\right) $$
-
-- (Predict $x\_{t-1}$ from $x\_t, \epsilon\_t$) 
-
-
-$$ x\_{t-1} \mid x\_t, x\_0 \sim \text{N}\left(\frac{1}{\sqrt{\bar{\alpha}\_t}}\left(x\_t-\frac{\beta\_t}{\sqrt{1-\bar{\alpha}\_t}}\epsilon\_t\right), \sigma\_t^2\right) $$
-
-where 
-
-$$\sigma\_t^2 = \frac{\beta\_t(1-\bar{\alpha}\_{t-1})}{1-\bar{\alpha}\_t}$$
+[^1]: Ho, Jonathan, Ajay Jain, and Pieter Abbeel. "Denoising diffusion probabilistic models." Advances in Neural Information Processing Systems 33 (2020): 6840-6851.
+[^2]: Song, Jiaming, Chenlin Meng, and Stefano Ermon. "Denoising Diffusion Implicit Models." International Conference on Learning Representations. 2020.
+[^3]: Heusel, Martin, et al. "Gans trained by a two time-scale update rule converge to a local nash equilibrium." Advances in neural information processing systems 30 (2017).
+[^4]: Kynkäänniemi, Tuomas, et al. "Improved precision and recall metric for assessing generative models." Advances in Neural Information Processing Systems 32 (2019).
+[^5]: DistributedDataParallel - PyTorch 1.12 Documentation, https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html. 
