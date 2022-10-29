@@ -192,8 +192,8 @@ class Trainer:
             except RuntimeError:
                 _chkpt = chkpt[trainee]["shadow"] if trainee == "ema" else chkpt[trainee]
                 for k in list(_chkpt.keys()):
-                    if k.split(".")[0] == "module":
-                        _chkpt[".".join(k.split(".")[1:])] = _chkpt.pop(k)
+                    if k.startswith("module."):
+                        _chkpt[k.split(".", maxsplit=1)[1]] = _chkpt.pop(k)
                 getattr(self, trainee).load_state_dict(chkpt[trainee])
             except AttributeError:
                 continue

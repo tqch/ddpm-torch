@@ -38,7 +38,7 @@ class CelebA(datasets.VisionDataset):
             "all": None,
         }
         split_ = split_map[split.lower()]
-        splits = self._load_csv("list_eval_partition.txt", header=0)
+        splits = self._load_csv("list_eval_partition.txt")
         mask = slice(None) if split_ is None else (splits.data == split_).squeeze()
         if mask == slice(None):  # if split == "all"
             self.filename = splits.index
@@ -64,7 +64,7 @@ class CelebA(datasets.VisionDataset):
         data = [row[1:] for row in data]
         data_int = [list(map(int, i)) for i in data]
 
-        return CSV(headers, indices, torch.tensor(data_int))
+        return CSV(headers, indices, torch.as_tensor(data_int))
 
     def __getitem__(self, index):
         X = PIL.Image.open(os.path.join(
@@ -126,6 +126,7 @@ DATA_INFO = {
             transforms.Resize((64, 64)),
             transforms.PILToTensor()
         ]),
+        "all": 202599,
         "train": 162770,
         "test": 19962,
         "validation": 19867

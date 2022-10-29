@@ -70,8 +70,8 @@ if __name__ == "__main__":
     else:
         state_dict = torch.load(chkpt_path, map_location=device)["model"]
     for k in list(state_dict.keys()):
-        if k.split(".")[0] == "module":  # state_dict of DDP
-            state_dict[".".join(k.split(".")[1:])] = state_dict.pop(k)
+        if k.startswith("module."):  # state_dict of DDP
+            state_dict[k.split(".", maxsplit=1)[1]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
     model.eval()
     for p in model.parameters():
