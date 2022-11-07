@@ -10,6 +10,14 @@ from torch.distributed.elastic.multiprocessing import errors
 from functools import partial
 
 
+class Configs(dict):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __getattr__(self, name):
+        return self.get(name, None)
+
+
 @errors.record
 def main(args):
 
@@ -36,32 +44,34 @@ def main(args):
 
     # train parameters
     gettr = partial(get_param, configs_1=configs.get("train", {}), configs_2=args)
-    batch_size = gettr("batch_size")
-    beta1, beta2 = gettr("beta1"), gettr("beta2")
-    lr = gettr("lr")
-    epochs = gettr("epochs")
-    grad_norm = gettr("grad_norm")
-    warmup = gettr("warmup")
+    t_cfgs = Configs(**{
+        k: gettr(k) for k in ("batch_size", "beta1", "beta2", "lr", "epochs", "grad_norm", "warmup")})
     train_device = torch.device(args.train_device)
     eval_device = torch.device(args.eval_device)
 
     # diffusion parameters
     getdif = partial(get_param, configs_1=configs.get("diffusion", {}), configs_2=args)
-    beta_schedule = getdif("beta_schedule")
-    beta_start, beta_end = getdif("beta_start"), getdif("beta_end")
-    timesteps = getdif("timesteps")
-    betas = get_beta_schedule(
-        beta_schedule, beta_start=beta_start, beta_end=beta_end, num_diffusion_timesteps=timesteps)
-    model_mean_type = getdif("model_mean_type")
-    model_var_type = getdif("model_var_type")
-    loss_type = getdif("loss_type")
+    d_cfgs = Configs(**{
+        k: getdif(k) for k in (
+            "beta_schedule",
+            "beta_start",
+            "beta_end",
+            "timesteps",
+            "model_mean_type",
+            "model_var_type",
+            "loss_type"
+        )})
 
-    diffusion = GaussianDiffusion(
-        betas=betas, model_mean_type=model_mean_type, model_var_type=model_var_type, loss_type=loss_type)
+    betas = get_beta_schedule(
+        d_cfgs.beta_schedule, beta_start=d_cfgs.beta_start, beta_end=d_cfgs.beta_end, timesteps=d_cfgs.timesteps)
+
+    diffusion = GaussianDiffusion(betas=betas, **d_cfgs)
 
     # denoise parameters
-    out_channels = 2 * in_channels if model_var_type == "learned" else in_channels
-    _model = UNet(out_channels=out_channels, **configs["denoise"])
+    out_channels = 2 * in_channels if d_cfgs.model_var_type == "learned" else in_channels
+    m_cfgs = configs["denoise"]
+    m_cfgs["out_channels"] = out_channels
+    _model = UNet(**m_cfgs)
 
     if distributed:
         # check whether torch.distributed is available
@@ -77,34 +87,37 @@ def main(args):
         rank = local_rank = 0  # main process by default
         model = _model.to(train_device)
 
-    optimizer = Adam(model.parameters(), lr=lr, betas=(beta1, beta2))
+    optimizer = Adam(model.parameters(), lr=t_cfgs.lr, betas=(t_cfgs.beta1, t_cfgs.beta2))
     # Note1: lr_lambda is used to calculate the **multiplicative factor**
     # Note2: index starts at 0
     scheduler = lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=lambda t: min((t + 1) / warmup, 1.0)) if warmup > 0 else None
+        optimizer, lr_lambda=lambda t: min((t + 1) / t_cfgs.warmup, 1.0)) if t_cfgs.warmup > 0 else None
 
     split = "all" if dataset == "celeba" else "train"
     num_workers = args.num_workers
     trainloader, sampler = get_dataloader(
-        dataset, batch_size=batch_size, split=split, val_size=0., random_seed=seed,
+        dataset, batch_size=t_cfgs.batch_size, split=split, val_size=0., random_seed=seed,
         root=root, drop_last=True, pin_memory=True, num_workers=num_workers, distributed=distributed
     )  # drop_last to have a static input shape; num_workers > 0 to enable asynchronous data loading
 
     hps = {
-        "lr": lr,
-        "batch_size": batch_size,
-        "configs": configs
+        "dataset": dataset,
+        "seed": seed,
+        "use_ema": args.use_ema,
+        "ema_decay": args.ema_decay,
+        "train": t_cfgs,
+        "denoise": m_cfgs,
+        "diffusion": d_cfgs
     }
-    hps_info = dict2str(hps)
     timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")
 
     chkpt_dir = args.chkpt_dir
     if not os.path.exists(chkpt_dir):
         os.makedirs(chkpt_dir)
 
-    # keep a record of hyperparameter setting used for this experiment run
+    # keep a record of hyperparameter settings used for this experiment run
     with open(os.path.join(chkpt_dir, f"exp_{timestamp}.info"), "w") as f:
-        f.write(hps_info)
+        json.dump(hps, f, indent=2)
 
     chkpt_path = os.path.join(chkpt_dir, args.chkpt_name or f"ddpm_{dataset}.pt")
     chkpt_intv = args.chkpt_intv
@@ -123,12 +136,12 @@ def main(args):
         model=model,
         optimizer=optimizer,
         diffusion=diffusion,
-        epochs=epochs,
+        epochs=t_cfgs.epochs,
         trainloader=trainloader,
         sampler=sampler,
         scheduler=scheduler,
         use_ema=args.use_ema,
-        grad_norm=grad_norm,
+        grad_norm=t_cfgs.grad_norm,
         shape=image_shape,
         device=train_device,
         chkpt_intv=chkpt_intv,
@@ -144,7 +157,8 @@ def main(args):
     if resume:
         try:
             map_location = {"cuda:0": f"cuda:{local_rank}"} if distributed else train_device
-            trainer.load_checkpoint(chkpt_path, map_location=map_location)
+            _chkpt_path = args.chkpt_path or chkpt_path
+            trainer.load_checkpoint(_chkpt_path, map_location=map_location)
         except FileNotFoundError:
             logger("Checkpoint file does not exist!")
             logger("Starting from scratch...")
@@ -188,6 +202,7 @@ if __name__ == "__main__":
     parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument("--resume", action="store_true", help="to resume training from a checkpoint")
+    parser.add_argument("--chkpt-path", default="", type=str, help="checkpoint path used to resume training")
     parser.add_argument("--eval", action="store_true", help="whether to evaluate fid during training")
     parser.add_argument("--use-ema", action="store_true", help="whether to use exponential moving average")
     parser.add_argument("--ema-decay", default=0.9999, type=float, help="decay factor of ema")

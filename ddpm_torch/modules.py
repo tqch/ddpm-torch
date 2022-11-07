@@ -6,7 +6,16 @@ from collections.abc import Iterable
 from itertools import repeat
 
 DEFAULT_DTYPE = torch.float32
-DEFAULT_INITIALIZER = lambda x, scale=1.: nn.init.xavier_uniform_(x, gain=(scale or 1e-10))
+
+
+def DEFAULT_INITIALIZER(x, scale=1.):
+    """
+    PyTorch Xavier uniform initialization: w ~ Uniform(-a, a), where a = gain * (6 / (fan_in + fan_out)) ** .5
+    TensorFlow Variance-Scaling initialization (mode="fan_avg", distribution="uniform"):
+    w ~ Uniform(-a, a), where a = (6 * scale / (fan_in + fan_out)) ** .5
+    Therefore, gain = scale ** .5
+    """
+    return nn.init.xavier_uniform_(x, gain=math.sqrt(scale or 1e-10))
 
 
 def ntuple(n, name="parse"):

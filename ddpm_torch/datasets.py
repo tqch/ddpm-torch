@@ -172,6 +172,8 @@ def get_dataloader(
 ):
     assert isinstance(val_size, float) and 0 <= val_size < 1
     transform = DATA_INFO[dataset]["transform"]
+    if distributed:
+        batch_size = batch_size // int(os.environ.get("WORLD_SIZE", "1"))
     dataloader_configs = {
         "batch_size": batch_size,
         "pin_memory": pin_memory,

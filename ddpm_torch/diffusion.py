@@ -1,43 +1,45 @@
-import numpy as np
+import math
 import torch
 from .functions import normal_kl, discretized_gaussian_loglik, flat_mean
 
 
-def _warmup_beta(beta_start, beta_end, num_diffusion_timesteps, warmup_frac):
-    betas = beta_end * np.ones(num_diffusion_timesteps, dtype=np.float64)
-    warmup_time = int(num_diffusion_timesteps * warmup_frac)
-    betas[:warmup_time] = np.linspace(beta_start, beta_end, warmup_time, dtype=np.float64)
+def _warmup_beta(beta_start, beta_end, timesteps, warmup_frac, dtype):
+    betas = beta_end * torch.ones(timesteps, dtype=dtype)
+    warmup_time = int(timesteps * warmup_frac)
+    betas[:warmup_time] = torch.linspace(beta_start, beta_end, warmup_time, dtype=dtype)
     return betas
 
 
-def get_beta_schedule(beta_schedule, beta_start, beta_end, num_diffusion_timesteps):
+def get_beta_schedule(beta_schedule, beta_start, beta_end, timesteps, dtype=torch.float64):
     if beta_schedule == 'quad':
-        betas = np.linspace(beta_start ** 0.5, beta_end ** 0.5, num_diffusion_timesteps, dtype=np.float64) ** 2
+        betas = torch.linspace(beta_start ** 0.5, beta_end ** 0.5, timesteps, dtype=dtype) ** 2
     elif beta_schedule == 'linear':
-        betas = np.linspace(beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64)
+        betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)
     elif beta_schedule == 'warmup10':
-        betas = _warmup_beta(beta_start, beta_end, num_diffusion_timesteps, 0.1)
+        betas = _warmup_beta(beta_start, beta_end, timesteps, 0.1, dtype=dtype)
     elif beta_schedule == 'warmup50':
-        betas = _warmup_beta(beta_start, beta_end, num_diffusion_timesteps, 0.5)
+        betas = _warmup_beta(beta_start, beta_end, timesteps, 0.5, dtype=dtype)
     elif beta_schedule == 'const':
-        betas = beta_end * np.ones(num_diffusion_timesteps, dtype=np.float64)
+        betas = beta_end * torch.ones(timesteps, dtype=dtype)
     elif beta_schedule == 'jsd':  # 1/T, 1/(T-1), 1/(T-2), ..., 1
-        betas = 1. / np.linspace(num_diffusion_timesteps, 1, num_diffusion_timesteps, dtype=np.float64)
+        betas = 1. / torch.linspace(timesteps, 1, timesteps, dtype=dtype)
     else:
         raise NotImplementedError(beta_schedule)
-    assert betas.shape == (num_diffusion_timesteps,)
+    assert betas.shape == (timesteps, )
     return betas
 
 
 class GaussianDiffusion:
+
     def __init__(
             self,
             betas,
             model_mean_type,
             model_var_type,
-            loss_type
+            loss_type,
+            **kwargs
     ):
-        assert isinstance(betas, np.ndarray) and betas.dtype == np.float64
+        assert isinstance(betas, torch.Tensor) and betas.dtype == torch.float64
         assert (betas > 0).all() and (betas <= 1).all()
         self.betas = betas
         self.model_mean_type = model_mean_type
@@ -47,27 +49,26 @@ class GaussianDiffusion:
         self.timesteps = len(betas)
 
         alphas = 1 - betas
-        self.alphas_bar = np.cumprod(alphas)
-        alphas_bar_prev = np.concatenate([np.ones(1, dtype=np.float64), self.alphas_bar[:-1]])
+        self.alphas_bar = torch.cumprod(alphas, dim=0)
+        alphas_bar_prev = torch.cat([torch.ones(1, dtype=torch.float64), self.alphas_bar[:-1]])
 
         # q(x_t | x_0)
-        self.sqrt_alphas_bar = np.sqrt(self.alphas_bar)
-        self.sqrt_one_minus_alphas_bar = np.sqrt(1. - self.alphas_bar)
+        self.sqrt_alphas_bar = torch.sqrt(self.alphas_bar)
+        self.sqrt_one_minus_alphas_bar = torch.sqrt(1. - self.alphas_bar)
 
         # q(x_{t-1} | x_t, x_0)
         # refer to the formula 1-3 in README.md
-        sqrt_alphas_bar_prev = np.sqrt(alphas_bar_prev)
-        self.sqrt_recip_alphas_bar = np.sqrt(1. / self.alphas_bar)
-        self.sqrt_recip_m1_alphas_bar = np.sqrt(1. / self.alphas_bar - 1.)  # m1: minus 1
+        sqrt_alphas_bar_prev = torch.sqrt(alphas_bar_prev)
+        self.sqrt_recip_alphas_bar = torch.sqrt(1. / self.alphas_bar)
+        self.sqrt_recip_m1_alphas_bar = torch.sqrt(1. / self.alphas_bar - 1.)  # m1: minus 1
         self.posterior_var = betas * (1. - alphas_bar_prev) / (1. - self.alphas_bar)
-        self.posterior_logvar_clipped = np.log(np.concatenate([
-            np.array([self.posterior_var[1], ], dtype=np.float64), self.posterior_var[1:]]))
+        self.posterior_logvar_clipped = torch.log(torch.cat([self.posterior_var[[1]], self.posterior_var[1:]]))
         self.posterior_mean_coef1 = betas * sqrt_alphas_bar_prev / (1. - self.alphas_bar)
-        self.posterior_mean_coef2 = np.sqrt(alphas) * (1. - alphas_bar_prev) / (1. - self.alphas_bar)
+        self.posterior_mean_coef2 = torch.sqrt(alphas) * (1. - alphas_bar_prev) / (1. - self.alphas_bar)
 
         # for fixed model_var_type's
         self.fixed_model_var, self.fixed_model_logvar = {
-            "fixed-large": (self.betas, np.log(np.concatenate([np.array([self.posterior_var[1]]), self.betas[1:]]))),
+            "fixed-large": (self.betas, torch.log(torch.cat([self.posterior_var[[1]], self.betas[1:]]))),
             "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
         }[self.model_var_type]
 
@@ -79,7 +80,7 @@ class GaussianDiffusion:
             dtype = x.dtype
             device = x.device
             ndim = x.ndim
-        out = torch.tensor(arr, dtype=dtype, device=device)[t]
+        out = torch.as_tensor(arr, dtype=dtype, device=device).gather(0, t)
         return out.reshape((-1, ) + (1, ) * (ndim - 1))
 
     def q_mean_var(self, x_0, t):
@@ -168,7 +169,7 @@ class GaussianDiffusion:
         for ti in range(self.timesteps - 1, -1, -1):
             t.fill_(ti)
             x_t = self.p_sample_step(denoise_fn, x_t, t)
-        return x_t
+        return x_t.cpu()
 
     @torch.inference_mode()
     def p_sample_progressive(
@@ -201,9 +202,9 @@ class GaussianDiffusion:
         model_mean, _, model_logvar, pred_x_0 = self.p_mean_var(
             denoise_fn, x_t=x_t, t=t, clip_denoised=clip_denoised, return_pred=True)
         kl = normal_kl(true_mean, true_logvar, model_mean, model_logvar)
-        kl = flat_mean(kl) / np.log(2.)  # natural base to base 2
+        kl = flat_mean(kl) / math.log(2.)  # natural base to base 2
         decoder_nll = discretized_gaussian_loglik(x_0, model_mean, log_scale=0.5 * model_logvar).neg()
-        decoder_nll = flat_mean(decoder_nll) / np.log(2.)
+        decoder_nll = flat_mean(decoder_nll) / math.log(2.)
         output = torch.where(t.to(kl.device) > 0, kl, decoder_nll)
         return (output, pred_x_0) if return_pred else output
 
@@ -240,7 +241,7 @@ class GaussianDiffusion:
         T_mean, _, T_logvar = self.q_mean_var(
             x_0=x_0, t=(T - 1) * torch.ones([B, ], dtype=torch.int64))
         kl_prior = normal_kl(T_mean, T_logvar, mean2=0., logvar2=0.)
-        return flat_mean(kl_prior) / np.log(2.)
+        return flat_mean(kl_prior) / math.log(2.)
 
     def calc_all_bpd(self, denoise_fn, x_0, clip_denoised=True):
         B, T = x_0.shape, self.timesteps

@@ -19,7 +19,7 @@ def get_timestep_embedding(timesteps, embed_dim: int, dtype: torch.dtype = DEFAU
     half_dim = embed_dim // 2
     embed = math.log(10000) / (half_dim - 1)
     embed = torch.exp(-torch.arange(half_dim, dtype=dtype, device=timesteps.device) * embed)
-    embed = torch.outer(timesteps.to(dtype), embed)
+    embed = torch.outer(timesteps.ravel().to(dtype), embed)
     embed = torch.cat([torch.sin(embed), torch.cos(embed)], dim=1)
     if embed_dim % 2 == 1:
         embed = F.pad(embed, [0, 1])  # padding the last dimension

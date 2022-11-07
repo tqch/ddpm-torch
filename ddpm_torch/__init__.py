@@ -8,7 +8,6 @@ from .models.unet import UNet
 __all__ = [
     "get_dataloader",
     "DATA_INFO",
-    "dict2str",
     "seed_all",
     "get_param",
     "Trainer",

@@ -1,4 +1,4 @@
-import numpy as np
+import math
 import torch
 from .. import diffusion
 from ..functions import normal_kl, continuous_gaussian_loglik, flat_mean
@@ -57,8 +57,8 @@ class GaussianDiffusion(diffusion.GaussianDiffusion):
         model_mean, _, model_logvar, pred_x_0 = self.p_mean_var(
             denoise_fn, x_t=x_t, t=t, clip_denoised=clip_denoised, return_pred=True)
         kl = normal_kl(true_mean, true_logvar, model_mean, model_logvar)
-        kl = flat_mean(kl) / np.log(2.)  # natural base to base 2
+        kl = flat_mean(kl) / math.log(2.)  # natural base to base 2
         decoder_nll = continuous_gaussian_loglik(x_0, model_mean, logvar=model_logvar).neg()
-        decoder_nll = flat_mean(decoder_nll) / np.log(2.)
+        decoder_nll = flat_mean(decoder_nll) / math.log(2.)
         output = torch.where(t.to(kl.device) > 0, kl, decoder_nll)
         return (output, pred_x_0) if return_pred else output

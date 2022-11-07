@@ -4,7 +4,6 @@ Use the deterministic generative process proposed by Song et al.[1]
 """
 import torch
 import ddpm_torch
-import numpy as np
 
 
 # def get_selection_schedule(schedule, size, timesteps):
@@ -33,9 +32,11 @@ def get_selection_schedule(schedule, size, timesteps):
     assert schedule in {"linear", "quadratic"}
 
     if schedule == "linear":
-        subsequence = np.arange(0, timesteps, timesteps // size)
+        subsequence = torch.arange(0, timesteps, timesteps // size)
     else:
-        subsequence = np.power(np.linspace(0, np.sqrt(timesteps * 0.8), size), 2).astype(np.int32)
+        subsequence = torch.pow(
+            torch.linspace(0, torch.sqrt(timesteps * 0.8), size), 2
+        ).round().to(torch.int32)
 
     return subsequence
 
@@ -51,35 +52,36 @@ class DDIM(ddpm_torch.GaussianDiffusion):
             'Cannot use DDIM (eta < 1) with var type other than "fixed-small"'
 
         self.alphas_bar = self.alphas_bar[subsequence]
-        self.alphas_bar_prev = np.concatenate([np.ones(1, dtype=np.float64), self.alphas_bar[:-1]])
+        self.alphas_bar_prev = torch.cat(
+            [torch.ones(1, dtype=torch.float64), self.alphas_bar[:-1]], dim=0)
         self.alphas = self.alphas_bar / self.alphas_bar_prev
         self.betas = 1. - self.alphas
-        self.sqrt_alphas_bar_prev = np.sqrt(self.alphas_bar_prev)
+        self.sqrt_alphas_bar_prev = torch.sqrt(self.alphas_bar_prev)
 
         # q(x_t|x_0)
         # re-parameterization: x_t(x_0, \epsilon_t)
-        self.sqrt_alphas_bar = np.sqrt(self.alphas_bar)
-        self.sqrt_one_minus_alphas_bar = np.sqrt(1. - self.alphas_bar)
+        self.sqrt_alphas_bar = torch.sqrt(self.alphas_bar)
+        self.sqrt_one_minus_alphas_bar = torch.sqrt(1. - self.alphas_bar)
 
         self.posterior_var = self.betas * (1. - self.alphas_bar_prev) / (1. - self.alphas_bar) * eta2
-        self.posterior_logvar_clipped = np.log(np.concatenate([
-            np.array([self.posterior_var[1], ], dtype=np.float64), self.posterior_var[1:]]).clip(min=1e-20))
+        self.posterior_logvar_clipped = torch.log(torch.cat([
+            self.posterior_var[[1]], self.posterior_var[1:]]).clip(min=1e-20))
 
         # coefficients to recover x_0 from x_t and \epsilon_t
-        self.sqrt_recip_alphas_bar = np.sqrt(1. / self.alphas_bar)
-        self.sqrt_recip_m1_alphas_bar = np.sqrt(1. / self.alphas_bar - 1.)
+        self.sqrt_recip_alphas_bar = torch.sqrt(1. / self.alphas_bar)
+        self.sqrt_recip_m1_alphas_bar = torch.sqrt(1. / self.alphas_bar - 1.)
 
         # coefficients to calculate E[x_{t-1}|x_0, x_t]
-        self.posterior_mean_coef2 = np.sqrt(
+        self.posterior_mean_coef2 = torch.sqrt(
             1 - self.alphas_bar - eta2 * self.betas
-        ) * np.sqrt(1 - self.alphas_bar_prev) / (1. - self.alphas_bar)
-        self.posterior_mean_coef1 = self.sqrt_alphas_bar_prev * (1. - np.sqrt(self.alphas) * self.posterior_mean_coef2)
+        ) * torch.sqrt(1 - self.alphas_bar_prev) / (1. - self.alphas_bar)
+        self.posterior_mean_coef1 = self.sqrt_alphas_bar_prev * (1. - torch.sqrt(self.alphas) * self.posterior_mean_coef2)
 
         # for fixed model_var_type's
         self.fixed_model_var, self.fixed_model_logvar = {
             "fixed-large": (
-                self.betas, np.log(
-                np.concatenate([np.array([self.posterior_var[1]]), self.betas[1:]]).clip(min=1e-20))),
+                self.betas, torch.log(
+                torch.cat([self.posterior_var[[1]], self.betas[1:]]).clip(min=1e-20))),
             "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
         }[self.model_var_type]
 
@@ -90,7 +92,7 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         S = len(self.subsequence)
         B, *_ = shape
         subsequence = self.subsequence.to(device)
-        _denoise_fn = lambda x, t: denoise_fn(x, subsequence[t])
+        _denoise_fn = lambda x, t: denoise_fn(x, subsequence.gather(0, t))
         t = torch.empty((B, ), dtype=torch.int64, device=device)
         if noise is None:
             x_t = torch.randn(shape, device=device)
