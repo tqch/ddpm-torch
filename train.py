@@ -80,7 +80,8 @@ def main(args):
         dist.init_process_group("nccl")
         rank = dist.get_rank()  # global process id across all node(s)
         local_rank = int(os.environ["LOCAL_RANK"])  # local device id on a single node
-        _model = _model.to(rank)
+        torch.cuda.set_device(local_rank)
+        _model = _model.cuda()
         model = DDP(_model, device_ids=[local_rank, ])
         train_device = torch.device(f"cuda:{local_rank}")
     else:
