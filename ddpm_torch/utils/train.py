@@ -2,12 +2,13 @@ import os
 import re
 import torch
 import torch.nn as nn
-from .utils import save_image, EMA
-from .metrics.fid_score import InceptionStatistics, get_precomputed, calc_fd
+from torchvision.utils import save_image as _save_image
+from functools import partial
 from tqdm import tqdm
 from contextlib import nullcontext
 from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
+import weakref
 
 
 class DummyScheduler:
@@ -55,6 +56,9 @@ class RunningStatistics:
         return out_str.format(self.count, **self.stats)
 
 
+save_image = partial(_save_image, nrow=8, normalize=True, value_range=(-1., 1.))
+
+
 class Trainer:
     def __init__(
             self,
@@ -68,9 +72,9 @@ class Trainer:
             use_ema=False,
             grad_norm=1.0,
             shape=None,
-            device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-            chkpt_intv=5,  # save a checkpoint every {chkpt_intv} epochs
-            image_intv=1,  # generate images every {image_intv} epochs
+            device=torch.device("cpu"),
+            chkpt_intv=5,
+            image_intv=1,
             num_save_images=64,
             ema_decay=0.9999,
             distributed=False,
@@ -116,6 +120,10 @@ class Trainer:
 
     def step(self, x):
         B = x.shape[0]
+        # Note: for DDP models, the gradients collected from different devices are averaged
+        # rather than summed as per the note in the documentation:
+        # https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
+        # Mean-reduced loss should be used to avoid inconsistent learning rate issue when number of devices changes
         loss = self.loss(x).mean()
         self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -125,7 +133,7 @@ class Trainer:
         # adjust learning rate every step (warming up)
         self.scheduler.step()
         if self.is_main and self.use_ema:
-            self.ema.update()
+            self.ema.update()  # noqa
         self.stats.update(B, loss=loss.item() * B)
 
     def sample_fn(self, noise, diffusion=None):
@@ -142,7 +150,12 @@ class Trainer:
 
         num_samples = self.num_save_images
         if num_samples:
-            noise = torch.randn((num_samples,) + self.shape)  # fixed x_T for image generation
+            shape = (num_samples,) + self.shape
+            # fixed x_T for image generation
+            # not of much importance since the entire reverse process is stochastic
+            noise = torch.randn(shape)
+        else:
+            noise = None
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
@@ -214,27 +227,71 @@ class Trainer:
             yield k, getattr(self, k).state_dict()
 
 
-class Evaluator:
-    def __init__(
-            self,
-            dataset,
-            diffusion=None,
-            eval_batch_size=256,
-            max_eval_count=10000,
-            device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ):
-        self.diffusion = diffusion
-        # inception stats
-        self.istats = InceptionStatistics(device=device)
-        self.eval_batch_size = eval_batch_size
-        self.max_eval_count = max_eval_count
-        self.device = device
-        self.target_mean, self.target_var = get_precomputed(dataset)
+class EMA:
+    """
+    exponential moving average
+    inspired by:
+    [1] https://github.com/fadel/pytorch_ema
+    [2] https://github.com/tensorflow/tensorflow/blob/v2.9.1/tensorflow/python/training/moving_averages.py#L281-L685
+    """
 
-    def eval(self, sample_fn):
-        self.istats.reset()
-        for _ in range(0, self.max_eval_count + self.eval_batch_size, self.eval_batch_size):
-            x = sample_fn(self.eval_batch_size, diffusion=self.diffusion)
-            self.istats(x.to(self.device))
-        gen_mean, gen_var = self.istats.get_statistics()
-        return {"fid": calc_fd(gen_mean, gen_var, self.target_mean, self.target_var)}
+    def __init__(self, model, decay=0.9999):
+        shadow = []
+        refs = []
+        for k, v in model.named_parameters():
+            if v.requires_grad:
+                shadow.append((k, v.detach().clone()))
+                refs.append((k, weakref.ref(v)))
+        self.shadow = dict(shadow)
+        self._refs = dict(refs)
+        self.decay = decay
+        self.num_updates = 0
+        self.backup = None
+
+    def update(self):
+        self.num_updates += 1
+        decay = min(self.decay, (1 + self.num_updates) / (10 + self.num_updates))
+        for k, _ref in self._refs.items():
+            assert _ref() is not None, "referenced object no longer exists!"
+            self.shadow[k] += (1 - decay) * (_ref().data - self.shadow[k])
+
+    def apply(self):
+        self.backup = dict([
+            (k, _ref().detach().clone()) for k, _ref in self._refs.items()])
+        for k, _ref in self._refs.items():
+            _ref().data.copy_(self.shadow[k])
+
+    def restore(self):
+        for k, _ref in self._refs.items():
+            _ref().data.copy_(self.backup[k])
+        self.backup = None
+
+    def __enter__(self):
+        self.apply()
+
+    def __exit__(self, *exc):
+        self.restore()
+
+    def state_dict(self):
+        return {
+            "decay": self.decay,
+            "shadow": self.shadow,
+            "num_updates": self.num_updates
+        }
+
+    @property
+    def extra_states(self):
+        return {"decay", "num_updates"}
+
+    def load_state_dict(self, state_dict, strict=True):
+        _dict_keys = set(self.__dict__["shadow"]).union(self.extra_states)
+        dict_keys = set(state_dict["shadow"]).union(self.extra_states)
+        incompatible_keys = set.symmetric_difference(_dict_keys, dict_keys) \
+            if strict else set.difference(_dict_keys, dict_keys)
+        if incompatible_keys:
+            raise RuntimeError(
+                "Key mismatch!\n"
+                f"Missing key(s): {', '.join(set.difference(_dict_keys, dict_keys))}."
+                f"Unexpected key(s): {', '.join(set.difference(dict_keys, _dict_keys))}"
+            )
+        self.__dict__.update(state_dict)

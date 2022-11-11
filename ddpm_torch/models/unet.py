@@ -42,7 +42,7 @@ class AttentionBlock(nn.Module):
         out = torch.einsum("bhwHW, bcHW -> bchw", w, v)
         return out
 
-    def forward(self, x, t_emb=None):
+    def forward(self, x, **kwargs):
         skip = self.skip(x)
         C = x.shape[1]
         assert C == self.in_channels

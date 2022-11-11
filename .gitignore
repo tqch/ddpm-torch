@@ -3,6 +3,7 @@ __pycache__
 .ipynb_checkpoints
 test
 precomputed
+figs
 images
 chkpts
 assets/original

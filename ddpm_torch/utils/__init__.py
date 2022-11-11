@@ -1,0 +1,89 @@
+import random
+import torch
+import numpy as np
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+
+mpl.rcParams["figure.dpi"] = 144
+
+
+def dict2str(d):
+    out_str = []
+    for k, v in d.items():
+        out_str.append(str(k))
+        if isinstance(v, (list, tuple)):
+            v = "_".join(list(map(str, v)))
+        elif isinstance(v, float):
+            v = f"{v:.2e}"
+        elif isinstance(v, dict):
+            v = dict2str(v)
+        else:
+            v = str(v)
+        out_str.append(v)
+    out_str = "_".join(out_str)
+    return out_str
+
+
+def seed_all(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def get_param(name, configs_1, configs_2):
+    def get(obj, name):
+        if hasattr(obj, "__getitem__"):
+            return obj[name]
+        elif hasattr(obj, "__getattribute__"):
+            return getattr(obj, name)
+        else:
+            NotImplementedError("Not supported!")
+    try:
+        param = get(configs_1, name)
+    except (KeyError, AttributeError):
+        param = get(configs_2, name)
+    return param
+
+
+def infer_range(dataset):
+    # infer proper x,y axes limits for evaluation/plotting
+    xlim = (dataset.data[:, 0].min(), dataset.data[:, 0].max())
+    ylim = (dataset.data[:, 1].min(), dataset.data[:, 1].max())
+    x_range = xlim[1] - xlim[0]
+    y_range = ylim[1] - ylim[0]
+    xlim = (xlim[0] - 0.05 * x_range, xlim[1] + 0.05 * x_range)
+    ylim = (ylim[0] - 0.05 * y_range, ylim[1] + 0.05 * y_range)
+    return xlim, ylim
+
+
+def save_scatterplot(fpath, x, y=None, xlim=None, ylim=None):
+    if hasattr(x, "ndim"):
+        x, y = split_squeeze(x) if x.ndim == 2 else (np.arange(len(x)), x)
+    plt.figure(figsize=(6, 6))
+    plt.scatter(x, y, s=0.5, alpha=0.7)
+
+    # set axes limits
+    if xlim is not None:
+        plt.xlim(*xlim)
+    if ylim is not None:
+        plt.ylim(*ylim)
+
+    plt.tight_layout()
+    plt.savefig(fpath)
+    plt.close()  # close current figure before exit
+
+
+def split_squeeze(data):
+    x, y = np.split(data, 2, axis=1)
+    x, y = x.squeeze(1), y.squeeze(1)
+    return x, y
+
+
+class Configs(dict):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __getattr__(self, name):
+        return self.get(name, None)

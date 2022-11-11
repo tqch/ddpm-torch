@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from sklearn.datasets import make_swiss_roll
 
 
-__all__ = ["Gaussian8", "Gaussian25", "SwissRoll"]
+__all__ = ["Gaussian8", "Gaussian25", "SwissRoll", "DataStreamer"]
 
 
 class ToyDataset(Dataset):
@@ -14,6 +14,7 @@ class ToyDataset(Dataset):
         self.noise = stdev
         self.random_state = random_state
         self.stdev = self._calc_stdev()
+        self.data = self._sample()
         
     def _calc_stdev(self):
         pass
@@ -39,9 +40,8 @@ class Gaussian8(ToyDataset):
     ]  # scale x (8 roots of z^8 = 1)
 
     def __init__(self, size, stdev=0.02, random_state=1234):
-        super(Gaussian8, self).__init__(size, stdev, random_state)
         self.modes = self.scale * np.array(self.modes, dtype=np.float32)
-        self.data = self._sample()
+        super(Gaussian8, self).__init__(size, stdev, random_state)
     
     def _calc_stdev(self):
         # total variance = expected conditional variance + variance of conditional expectation
@@ -61,10 +61,9 @@ class Gaussian25(ToyDataset):
     modes = [(i, j) for i in range(-2, 3) for j in range(-2, 3)]
 
     def __init__(self, size, stdev=0.05, random_state=1234):
-        super(Gaussian25, self).__init__(size, stdev, random_state)
         self.modes = self.scale * np.array(self.modes, dtype=np.float32)
-        self.data = self._sample()
-    
+        super(Gaussian25, self).__init__(size, stdev, random_state)
+
     def _calc_stdev(self):
         # x-y symmetric; around 2.828
         return math.sqrt(self.noise ** 2 + (self.scale ** 2) * 2.)  
@@ -97,7 +96,6 @@ class SwissRoll(ToyDataset):
 
     def __init__(self, size, stdev=0.25, random_state=1234):
         super(SwissRoll, self).__init__(size, stdev, random_state)
-        self.data = self._sample()
 
     def _calc_stdev(self):
         # calculate the stdev's for the data

@@ -1,10 +1,9 @@
-<p align="center">
-<img alt="banner" src="./assets/banner.webp">
-</p>
+<p align="center"><img alt="banner" src="./assets/banner.webp" width="100%"></p>
 
 ---
 
 # PyTorch Implementation of Denoising Diffusion Probabilistic Models [[paper]](https://arxiv.org/abs/2006.11239) [[official repo]](https://github.com/hojonathanho/diffusion)
+
 
 ## Features
 
@@ -14,6 +13,7 @@
 	- [x] Fréchet Inception Distance[^3] (FID)
 	- [x] Precision & Recall[^4]
 - [x] Distributed Data Parallel[^5] (DDP) multi-GPU training
+
 
 ## Requirements
 
@@ -142,84 +142,188 @@ python train.py --dataset cifar10 --train-device cuda:0 --epochs 50
 export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv_backend c10d train.py --dataset celeba --use-ema --distributed
 ```
 
+
 ## Experiment results
 
 ### Toy data
 
-#### 8 Gaussian
+<p align="center">
+	<table width="100%">
+		<tr>
+			<th width="10%"><b>Dataset</b></th>
+			<th width="30%">8 Gaussian</th>
+			<th width="30%">25 Gaussian</th>
+			<th width="30%">Swiss Roll</th>
+		</tr><tr>
+			<td><b>True</b></td>
+			<td><img alt="gaussian8_true" src="./assets/toy/gaussian8_true.jpg"></td>
+			<td><img alt="gaussian25_true" src="./assets/toy/gaussian25_true.jpg"></td>
+			<td><img alt="swissroll_true" src="./assets/toy/swissroll_true.jpg"></td>
+		</tr><tr>
+			<td><b>Generated</b></td>
+			<td><img alt="gaussian8_gen" src="./assets/toy/gaussian8_gen.jpg"></td>
+			<td><img alt="gaussian25_gen" src="./assets/toy/gaussian25_gen.jpg"></td>
+			<td><img alt="swissroll_gen" src="./assets/toy/swissroll_gen.jpg"></td>
+		</tr>
+	</table>
+</p>
 
 <details>
-	<summary>Training process</summary>
-	<p align="center"> 
-		<img alt="gaussian8" src="./assets/gaussian8.webp" height=360 width=360 /> 
-	</p>
-</details>
-
-#### 25 Gaussian
-<details>
-	<summary>Training process</summary>
-	<p align="center"> 
-		<img alt="gaussian25" src="./assets/gaussian25.webp" height=360 width=360 /> 
-	</p>
-</details>
-
-#### Swiss Roll
-<details>
-	<summary>Training process</summary>
-	<p align="center">
-    	<img alt="swissroll" src="./assets/swissroll.webp" height=360 width=360 /> 
+	<summary>Training process (animated)</summary>
+    <p>
+        <table width="100%">
+            <tr>
+                <th width="10%"><b>Dataset</b></th>
+                <th width="30%">8 Gaussian</th>
+                <th width="30%">25 Gaussian</th>
+                <th width="30%">Swiss Roll</th>
+            </tr><tr>
+                <td><b>Generated</b></td>
+                <td><img alt="gaussian8_train_anim" src="./assets/toy/gaussian8_train.webp"></td>
+                <td><img alt="gaussian25_train_anim" src="./assets/toy/gaussian25_train.webp"></td>
+                <td><img alt="swissroll_train_anim" src="./assets/toy/swissroll_train.webp"></td>
+            </tr>
+        </table>
     </p>
 </details>
 
 ### Real-world data
 
-*Table of evaluation metrics*
+*Table of evaluated metrics*
 
-|Dataset|FID (↓)|Precision (↑)|Recall (↑)|Training steps|Training loss|
-|:---:|:---:|:---:|:---:|:---:|:---:|
-|CIFAR-10|9.23|0.692|0.473|46.8k|0.0302|
-|\|__|  6.02   |     0.693     |   0.510    |93.6k|0.0291|
-|\|__|  4.04   |     0.701     |   0.550    |234.0k|0.0298|
-|\|__|  3.36   |     0.717     |   **0.559**   |468.0k|0.0284|
-|\|__| **3.25** | **0.736** | 0.548 |842.4k|**0.0277**|
-|CelebA| 4.81 | **0.766** | 0.490 |189.8k|0.0153|
-|\|__| 3.88 | 0.760 | 0.516 |379.7k|0.0151|
-|\|__| **3.07** | 0.754 | **0.540** |949.2k|**0.0147**|
+<p align="center">
+    <table width="100%">
+        <tr>
+            <th>Dataset</th>
+            <th>FID (↓)</th>
+            <th>Precision (↑)</th>
+            <th>Recall (↑)</th>
+            <th>Training steps</th>
+            <th>Training loss</th>
+            <th>Checkpoint</th>
+        </tr><tr>
+            <td>CIFAR-10</td>
+            <td>9.23</td>
+            <td>0.692</td>
+            <td>0.473</td>
+            <td>46.8k</td>
+            <td>0.0302</td>
+			<td>-</td>
+        </tr>
+        <tr>
+            <td>&emsp;|__</td>
+            <td>6.02</td>
+            <td>0.693</td>
+            <td>0.510</td>
+            <td>93.6k</td>
+            <td>0.0291</td>
+            <td>-</td>
+        </tr><tr>
+            <td>&emsp;|__</td>
+            <td>4.04</td>
+            <td>0.701</td>
+            <td>0.550</td>
+            <td>234.0k</td>
+            <td>0.0298</td>
+            <td>-</td>
+        </tr><tr>
+            <td>&emsp;|__</td>
+            <td>3.36</td>
+            <td>0.717</td>
+            <td><b>0.559</b></td>
+            <td>468.0k</td>
+            <td>0.0284</td>
+            <td>-</td>
+        </tr>
+        <tr>
+            <td>&emsp;|__</td>
+            <td><b>3.25</b></td>
+            <td><b>0.736</b></td>
+            <td>0.548</td>
+            <td>842.4k</td>
+            <td><b>0.0277</b></td>
+            <td><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_cifar10_2160.pt">[Link]</a></td>
+        </tr><tr>
+            <td>CelebA</td>
+            <td>4.81</td>
+            <td><b>0.766</b></td>
+            <td>0.490</td>
+            <td>189.8k</td>
+            <td>0.0153</td>
+			<td>-</td>
+        </tr>
+        <tr>
+            <td>&emsp;|__</td>
+            <td>3.88</td>
+            <td>0.760</td>
+            <td>0.516</td>
+            <td>379.7k</td>
+            <td>0.0151</td>
+			<td>-</td>
+        </tr>
+        <tr>
+            <td>&emsp;|__</td>
+            <td><b>3.07</b></td>
+            <td>0.754</td>
+            <td><b>0.540</b></td>
+            <td>949.2k</td>
+            <td><b>0.0147</b></td>
+			<td><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_celeba_600.pt">[Link]</a></td>
+        </tr>
+    </table>
+</p>
 
-
-#### CIFAR-10 [[checkpoint]](https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_cifar10_2160.pt)
-
+<p align="center">
+	<table width="100%">
+            <tr>
+                <th width="10%">Dataset</th>
+                <th width="45%">CIFAR-10</td>
+                <th width="45%">CelebA</td>
+            </tr><tr>
+                <td><b>Generated images</b></td>
+                <td><img alt="cifar10_gen" src="./assets/cifar10_gen.jpg" height="100%" width="100%"></td>
+                <td><img alt="celeba_gen" src="./assets/celeba_gen.jpg" height="100%" width="100%"></td>
+            </tr>
+	</table>
+</p>
 <details>
-	<summary>Training process</summary>
-	(2160 epochs)
-	<p align="center">
-    	<img alt="cifar10_train_2160" src="./assets/cifar10_train_2160.webp" /> 
+	<summary>Training process (animated)</summary>
+    <p align="center">
+        <table width="100%">
+            <tr>
+                <th width="10%">Dataset</th>
+                <th width="45%">CIFAR-10</td>
+                <th width="45%">CelebA</td>
+            </tr><tr>
+                <td><b>Generated images</b></td>
+                <td><img alt="cifar10_train_anim" src="./assets/cifar10_train.webp" height="100%" width="100%"></td>
+                <td><img alt="celeba_train_anim" src="./assets/celeba_train.webp" height="100%" width="100%"></td>
+            </tr>
+        </table>
     </p>
 </details>
 
 <details>
-	<summary>Denoising process</summary>
-	<p align="center">
-		<img alt="cifar10_denoise_100"src="./assets/cifar10_denoise_100.webp" /> 
-	</p>
-</details>
-
-#### CelebA [[checkpoint]](https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_celeba_600.pt)
-
-<details>
-	<summary>Training process</summary>
-	(600 epochs)
-	<p align="center">
-    	<img alt="cifar10_train_100" src="./assets/celeba_train_600.webp" /> 
+	<summary>Denoising process (animated)</summary>
+    <p align="center">
+        <table width="100%"">
+            <tr>
+                <th width="10%">Dataset</th>
+                <th width="45%">CIFAR-10</td>
+                <th width="45%">CelebA</td>
+            </tr><tr>
+                <td><b>Generated images</b></td>
+                <td><img alt="cifar10_denoise_anim" src="./assets/cifar10_denoise.webp" height="100%" width="100%"></td>
+                <td><img alt="celeba_denoise_anim" src="./assets/celeba_denoise.webp" height="100%" width="100%"></td>
+            </tr>
+        </table>
     </p>
 </details>
 
-<details>
-	<summary>Denoising process</summary>
-	<p align="center">
-		<img alt="cifar10_denoise_100"src="./assets/celeba_denoise_100.webp" /> 
-	</p>
-</details>
+## Related repositories
+- Simple Web App empowered by Streamlit: [[tqch/diffusion-webapp]](https://github.com/tqch/diffusion-webapp)
+- Classifier-Free Guidance: [[tqch/v-diffusion-torch]](https://github.com/tqch/v-diffusion-torch)
+
 
 ## References
 
@@ -227,4 +331,4 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 [^2]: Song, Jiaming, Chenlin Meng, and Stefano Ermon. "Denoising Diffusion Implicit Models." International Conference on Learning Representations. 2020.
 [^3]: Heusel, Martin, et al. "Gans trained by a two time-scale update rule converge to a local nash equilibrium." Advances in neural information processing systems 30 (2017).
 [^4]: Kynkäänniemi, Tuomas, et al. "Improved precision and recall metric for assessing generative models." Advances in Neural Information Processing Systems 32 (2019).
-[^5]: DistributedDataParallel - PyTorch 1.12 Documentation, https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html. 
+[^5]: DistributedDataParallel - PyTorch 1.12 Documentation, https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html.

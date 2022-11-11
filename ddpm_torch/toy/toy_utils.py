@@ -5,8 +5,8 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from ..functions import discrete_klv2d, hist2d
-from ..train_utils import DummyScheduler, RunningStatistics
 from ..utils import save_scatterplot
+from ..utils.train import DummyScheduler, RunningStatistics
 
 
 class Trainer:
@@ -20,9 +20,9 @@ class Trainer:
             scheduler=None,
             shape=None,
             grad_norm=0,
-            device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-            eval_intv=1,  # evaluate every {eval_intv} epochs
-            chkpt_intv=10,  # save a checkpoint every {chkpt_intv} epochs
+            device=torch.device("cpu"),
+            eval_intv=1,
+            chkpt_intv=10,
     ):
         self.model = model
         self.optimizer = optimizer
@@ -139,7 +139,7 @@ class Evaluator:
         self.value_range = value_range
         self.eps = eps
         self.true_hist = self.get_histogram(true_data)
-        self.true_hist.setflags(write=False)  # make true_hist read-only
+        self.true_hist.setflags(write=False)  # noqa; make true_hist read-only
 
     def get_histogram(self, data):
         hist = 0

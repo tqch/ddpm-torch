@@ -60,7 +60,7 @@ if __name__ == "__main__":
     beta_start, beta_end = args.beta_start, args.beta_end
     timesteps = args.timesteps
     betas = get_beta_schedule(
-        beta_schedule, beta_start=beta_start, beta_end=beta_end, num_diffusion_timesteps=timesteps)
+        beta_schedule, beta_start=beta_start, beta_end=beta_end, timesteps=timesteps)
     model_mean_type = args.model_mean_type
     model_var_type = args.model_var_type
     loss_type = args.loss_type
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     # load evaluator
     max_eval_count = min(data_size, 30000)
     eval_batch_size = min(max_eval_count, 30000)
-    xlim, ylim = infer_range(trainloader, precision=1)
+    xlim, ylim = infer_range(trainloader.dataset)
     value_range = (xlim, ylim)
     true_data = iter(trainloader)
     evaluator = Evaluator(
