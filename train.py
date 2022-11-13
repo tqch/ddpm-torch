@@ -36,8 +36,8 @@ def main(args):
 
     # train parameters
     gettr = partial(get_param, configs_1=configs.get("train", {}), configs_2=args)
-    t_cfgs = Configs(**{
-        k: gettr(k) for k in ("batch_size", "beta1", "beta2", "lr", "epochs", "grad_norm", "warmup")})
+    t_cfgs = Configs(**{k: gettr(k) for k in ("batch_size", "beta1", "beta2", "lr", "epochs", "grad_norm", "warmup")})
+    t_cfgs.batch_size //= args.num_accum
     train_device = torch.device(args.train_device)
     eval_device = torch.device(args.eval_device)
 
@@ -98,6 +98,7 @@ def main(args):
         "seed": seed,
         "use_ema": args.use_ema,
         "ema_decay": args.ema_decay,
+        "num_accum": args.num_accum,
         "train": t_cfgs,
         "denoise": m_cfgs,
         "diffusion": d_cfgs
@@ -133,6 +134,7 @@ def main(args):
         trainloader=trainloader,
         sampler=sampler,
         scheduler=scheduler,
+        num_accum=args.num_accum,
         use_ema=args.use_ema,
         grad_norm=t_cfgs.grad_norm,
         shape=image_shape,
@@ -176,6 +178,7 @@ if __name__ == "__main__":
     parser.add_argument("--beta1", default=0.9, type=float, help="beta_1 in Adam")
     parser.add_argument("--beta2", default=0.999, type=float, help="beta_2 in Adam")
     parser.add_argument("--batch-size", default=128, type=int)
+    parser.add_argument("--num-accum", default=1, type=int, help="number of mini-batches before an update")
     parser.add_argument("--timesteps", default=1000, type=int, help="number of diffusion steps")
     parser.add_argument("--beta-schedule", choices=["quad", "linear", "warmup10", "warmup50", "jsd"], default="linear")
     parser.add_argument("--beta-start", default=0.0001, type=float)

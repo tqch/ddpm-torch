@@ -70,6 +70,7 @@ class Trainer:
             trainloader,
             sampler=None,
             scheduler=None,
+            num_accum=1,
             use_ema=False,
             grad_norm=1.0,
             shape=None,
@@ -93,6 +94,7 @@ class Trainer:
         self.shape = shape
         self.scheduler = DummyScheduler() if scheduler is None else scheduler
 
+        self.num_accum = num_accum
         self.grad_norm = grad_norm
         self.device = device
         self.chkpt_intv = chkpt_intv
@@ -108,7 +110,7 @@ class Trainer:
         self.sample_seed = torch.initial_seed() + self.rank  # device-specific seed
 
         self.use_ema = use_ema
-        if self.is_main and use_ema:
+        if use_ema:
             if isinstance(model, DDP):
                 self.ema = EMA(model.module, decay=ema_decay)
             else:
@@ -128,21 +130,23 @@ class Trainer:
         assert loss.shape == (x.shape[0], )
         return loss
 
-    def step(self, x):
+    def step(self, x, global_steps=1):
         # Note: for DDP models, the gradients collected from different devices are averaged
         # rather than summed as per the note in the documentation:
         # https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
         # Mean-reduced loss should be used to avoid inconsistent learning rate issue when number of devices changes
         loss = self.loss(x).mean()
-        loss.backward()
-        # gradient clipping by global norm
-        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
-        self.optimizer.step()
-        self.optimizer.zero_grad(set_to_none=True)
-        # adjust learning rate every step (warming up)
-        self.scheduler.step()
-        if self.use_ema and hasattr(self.ema, "update"):
-            self.ema.update()
+        loss.div(self.num_accum).backward()  # average over accumulated mini-batches
+        if global_steps % self.num_accum == 0:
+            # gradient clipping by global norm
+            nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
+            self.optimizer.step()
+            self.optimizer.zero_grad(set_to_none=True)
+            # adjust learning rate every step (warming up)
+            self.scheduler.step()
+            if self.use_ema and hasattr(self.ema, "update"):
+                self.ema.update()
+        loss = loss.detach()
         if self.distributed:
             dist.reduce(loss, dst=0, op=dist.ReduceOp.SUM)  # synchronize losses
             loss.div_(self.world_size)
@@ -172,6 +176,7 @@ class Trainer:
         else:
             shape, noise = None, None
 
+        global_steps = 0
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
@@ -179,7 +184,8 @@ class Trainer:
                 self.sampler.set_epoch(e)
             with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_main) as t:
                 for i, (x, _) in enumerate(t):
-                    self.step(x.to(self.device))
+                    global_steps += 1
+                    self.step(x.to(self.device), global_steps=global_steps)
                     t.set_postfix(self.current_stats)
                     if i == len(self.trainloader) - 1:
                         self.model.eval()

@@ -29,16 +29,16 @@
 <details>
 <summary>Expand</summary>
 <pre><code>
-usage: train_toy.py [-h] [--dataset {gaussian8,gaussian25,swissroll}]
+usage: train_toy.py [-h] [--dataset {gaussian8,gaussian25,swissroll}]      
                     [--size SIZE] [--root ROOT] [--epochs EPOCHS] [--lr LR]
                     [--beta1 BETA1] [--beta2 BETA2] [--lr-warmup LR_WARMUP]
-                    [--batch-size BATCH_SIZE] [--timesteps TIMESTEPS]
-                    [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]
-                    [--beta-start BETA_START] [--beta-end BETA_END]
-                    [--model-mean-type {mean,x_0,eps}]
-                    [--model-var-type {learned,fixed-small,fixed-large}]
-                    [--loss-type {kl,mse}] [--image-dir IMAGE_DIR]
-                    [--chkpt-dir CHKPT_DIR] [--chkpt-intv CHKPT_INTV]
+                    [--batch-size BATCH_SIZE] [--timesteps TIMESTEPS]      
+                    [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]  
+                    [--beta-start BETA_START] [--beta-end BETA_END]        
+                    [--model-mean-type {mean,x_0,eps}]                     
+                    [--model-var-type {learned,fixed-small,fixed-large}]   
+                    [--loss-type {kl,mse}] [--image-dir IMAGE_DIR]         
+                    [--chkpt-dir CHKPT_DIR] [--chkpt-intv CHKPT_INTV]      
                     [--eval-intv EVAL_INTV] [--seed SEED] [--resume]
                     [--device DEVICE] [--mid-features MID_FEATURES]
                     [--num-temporal-layers NUM_TEMPORAL_LAYERS]
@@ -68,7 +68,7 @@ optional arguments:
                         frequency of saving a checkpoint
   --eval-intv EVAL_INTV
   --seed SEED           random seed
-  --resume              to resume from a checkpoint
+  --resume              to resume training from a checkpoint
   --device DEVICE
   --mid-features MID_FEATURES
   --num-temporal-layers NUM_TEMPORAL_LAYERS
@@ -79,20 +79,23 @@ optional arguments:
 
 <details><summary>Expand</summary>
 <pre><code>
-usage: train.py [-h] [--dataset {mnist,cifar10,celeba}] [--root ROOT]
-                [--epochs EPOCHS] [--lr LR] [--beta1 BETA1] [--beta2 BETA2]
-                [--batch-size BATCH_SIZE] [--timesteps TIMESTEPS]
-                [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]
+usage: train.py [-h] [--dataset {mnist,cifar10,celeba}] [--root ROOT]        
+                [--epochs EPOCHS] [--lr LR] [--beta1 BETA1] [--beta2 BETA2]  
+                [--batch-size BATCH_SIZE] [--num-accum NUM_ACCUM]
+                [--timesteps TIMESTEPS]
+                [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]        
                 [--beta-start BETA_START] [--beta-end BETA_END]
                 [--model-mean-type {mean,x_0,eps}]
                 [--model-var-type {learned,fixed-small,fixed-large}]
                 [--loss-type {kl,mse}] [--num-workers NUM_WORKERS]
-                [--train-device TRAIN_DEVICE] [--eval-device EVAL_DEVICE]
-                [--image-dir IMAGE_DIR] [--num-save-images NUM_SAVE_IMAGES]
-                [--config-dir CONFIG_DIR] [--chkpt-dir CHKPT_DIR]
-                [--chkpt-intv CHKPT_INTV] [--seed SEED] [--resume] [--eval]
-                [--use-ema] [--ema-decay EMA_DECAY] [--distributed]
-optional arguments:
+                [--train-device TRAIN_DEVICE] [--eval-device EVAL_DEVICE]    
+                [--image-dir IMAGE_DIR] [--image-intv IMAGE_INTV]
+                [--num-save-images NUM_SAVE_IMAGES] [--config-dir CONFIG_DIR]
+                [--chkpt-dir CHKPT_DIR] [--chkpt-name CHKPT_NAME]
+                [--chkpt-intv CHKPT_INTV] [--seed SEED] [--resume]           
+                [--chkpt-path CHKPT_PATH] [--eval] [--use-ema]               
+                [--ema-decay EMA_DECAY] [--distributed]                      
+optional arguments:                                                          
   -h, --help            show this help message and exit
   --dataset {mnist,cifar10,celeba}
   --root ROOT           root directory of datasets
@@ -101,27 +104,23 @@ optional arguments:
   --beta1 BETA1         beta_1 in Adam
   --beta2 BETA2         beta_2 in Adam
   --batch-size BATCH_SIZE
-  --timesteps TIMESTEPS
-                        number of diffusion steps
-  --beta-schedule {quad,linear,warmup10,warmup50,jsd}
-  --beta-start BETA_START
-  --beta-end BETA_END
-  --model-mean-type {mean,x_0,eps}
-  --model-var-type {learned,fixed-small,fixed-large}
-  --loss-type {kl,mse}
-  --num-workers NUM_WORKERS
+  --num-accum NUM_ACCUM
                         number of workers for data loading
   --train-device TRAIN_DEVICE
   --eval-device EVAL_DEVICE
   --image-dir IMAGE_DIR
+  --image-intv IMAGE_INTV
   --num-save-images NUM_SAVE_IMAGES
                         number of images to generate & save
   --config-dir CONFIG_DIR
   --chkpt-dir CHKPT_DIR
+  --chkpt-name CHKPT_NAME
   --chkpt-intv CHKPT_INTV
                         frequency of saving a checkpoint
   --seed SEED           random seed
-  --resume              to resume from a checkpoint
+  --resume              to resume training from a checkpoint
+  --chkpt-path CHKPT_PATH
+                        checkpoint path used to resume training
   --eval                whether to evaluate fid during training
   --use-ema             whether to use exponential moving average
   --ema-decay EMA_DECAY
