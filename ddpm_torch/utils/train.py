@@ -2,13 +2,14 @@ import os
 import re
 import torch
 import torch.nn as nn
-from torchvision.utils import save_image as _save_image
-from functools import partial
-from tqdm import tqdm
-from contextlib import nullcontext
-from torch.utils.data.distributed import DistributedSampler
 import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
+from torchvision.utils import save_image as _save_image
 import weakref
+from tqdm import tqdm
+from functools import partial
+from contextlib import nullcontext
 
 
 class DummyScheduler:
@@ -101,40 +102,51 @@ class Trainer:
         if distributed:
             assert sampler is not None
         self.distributed = distributed
+        self.rank = rank
         self.is_main = rank == 0
+        self.world_size = int(os.environ.get("WORLD_SIZE", "1"))
+        self.sample_seed = torch.initial_seed() + self.rank  # device-specific seed
+
         self.use_ema = use_ema
         if self.is_main and use_ema:
-            self.ema = EMA(self.model, decay=ema_decay)
+            if isinstance(model, DDP):
+                self.ema = EMA(model.module, decay=ema_decay)
+            else:
+                self.ema = EMA(model, decay=ema_decay)
         else:
             self.ema = nullcontext()
 
         self.stats = RunningStatistics(loss=None)
 
+    @property
+    def timesteps(self):
+        return self.diffusion.timesteps
+
     def loss(self, x):
-        B = x.shape[0]
-        T = self.diffusion.timesteps
-        t = torch.randint(T, size=(B, ), dtype=torch.int64, device=self.device)
+        t = torch.randint(self.timesteps, size=(x.shape[0], ), dtype=torch.int64, device=self.device)
         loss = self.diffusion.train_losses(self.model, x_0=x, t=t)
-        assert loss.shape == (B, )
+        assert loss.shape == (x.shape[0], )
         return loss
 
     def step(self, x):
-        B = x.shape[0]
         # Note: for DDP models, the gradients collected from different devices are averaged
         # rather than summed as per the note in the documentation:
         # https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
         # Mean-reduced loss should be used to avoid inconsistent learning rate issue when number of devices changes
         loss = self.loss(x).mean()
-        self.optimizer.zero_grad(set_to_none=True)
         loss.backward()
         # gradient clipping by global norm
         nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
         self.optimizer.step()
+        self.optimizer.zero_grad(set_to_none=True)
         # adjust learning rate every step (warming up)
         self.scheduler.step()
-        if self.is_main and self.use_ema:
-            self.ema.update()  # noqa
-        self.stats.update(B, loss=loss.item() * B)
+        if self.use_ema and hasattr(self.ema, "update"):
+            self.ema.update()
+        if self.distributed:
+            dist.reduce(loss, dst=0, op=dist.ReduceOp.SUM)  # synchronize losses
+            loss.div_(self.world_size)
+        self.stats.update(x.shape[0], loss=loss.item() * x.shape[0])
 
     def sample_fn(self, noise, diffusion=None):
         if diffusion is None:
@@ -142,7 +154,8 @@ class Trainer:
         shape = noise.shape
         with self.ema:
             sample = diffusion.p_sample(
-                denoise_fn=self.model, shape=shape, device=self.device, noise=noise)
+                denoise_fn=self.model, shape=shape,
+                device=self.device, noise=noise, seed=self.sample_seed)
         assert sample.grad is None
         return sample
 
@@ -150,12 +163,15 @@ class Trainer:
 
         num_samples = self.num_save_images
         if num_samples:
-            shape = (num_samples,) + self.shape
+            assert num_samples % self.world_size == 0, "Number of samples should be divisible by WORLD_SIZE!"
+            shape = (num_samples // self.world_size, ) + self.shape
             # fixed x_T for image generation
             # not of much importance since the entire reverse process is stochastic
-            noise = torch.randn(shape)
+            rng = torch.Generator().manual_seed(self.sample_seed)
+            noise = torch.empty(shape).normal_(generator=rng)
         else:
-            noise = None
+            shape, noise = None, None
+
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
@@ -175,12 +191,19 @@ class Trainer:
                         results.update(self.current_stats)
                         results.update(eval_results)
                         t.set_postfix(results)
-            if self.is_main:
-                if not (e + 1) % self.image_intv and num_samples and image_dir:
-                    x = self.sample_fn(noise).cpu()
-                    save_image(x, os.path.join(image_dir, f"{e+1}.jpg"))
-                if not (e + 1) % self.chkpt_intv and chkpt_path:
-                    self.save_checkpoint(chkpt_path, epoch=e+1, **results)
+
+            if not (e + 1) % self.image_intv and num_samples and image_dir:
+                x = self.sample_fn(noise)
+                if self.distributed:
+                    # balance GPU memory usages within the same process group
+                    x_list = [torch.zeros(shape, device=self.device) for _ in range(self.world_size)]
+                    dist.all_gather(x_list, x)
+                    x = torch.cat(x_list, dim=0)
+                x = x.cpu()
+                if self.is_main:
+                    save_image(x.cpu(), os.path.join(image_dir, f"{e + 1}.jpg"))
+            if not (e + 1) % self.chkpt_intv and chkpt_path and self.is_main:
+                self.save_checkpoint(chkpt_path, epoch=e+1, **results)
             if self.distributed:
                 dist.barrier()  # synchronize all processes here
 

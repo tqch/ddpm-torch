@@ -149,32 +149,34 @@ class GaussianDiffusion:
 
     # === sample ===
 
-    def p_sample_step(self, denoise_fn, x_t, t, clip_denoised=True, return_pred=False):
-        ndim = x_t.ndim
+    def p_sample_step(self, denoise_fn, x_t, t, clip_denoised=True, return_pred=False, generator=None):
         model_mean, _, model_logvar, pred_x_0 = self.p_mean_var(
             denoise_fn, x_t, t, clip_denoised=clip_denoised, return_pred=True)
-        noise = torch.randn_like(x_t)
-        nonzero_mask = (t > 0).reshape((-1,) + (1,) * (ndim - 1)).to(x_t)
+        noise = torch.empty_like(x_t).normal_(generator=generator)
+        nonzero_mask = (t > 0).reshape((-1,) + (1,) * (x_t.ndim - 1)).to(x_t)
         sample = model_mean + nonzero_mask * torch.exp(0.5 * model_logvar) * noise
         return (sample, pred_x_0) if return_pred else sample
 
     @torch.inference_mode()
-    def p_sample(self, denoise_fn, shape, device=torch.device("cpu"), noise=None):
-        B, *_ = shape
+    def p_sample(self, denoise_fn, shape=None, device=torch.device("cpu"), noise=None, seed=None):
+        B = (shape or noise.shape)[0]
         t = torch.empty((B, ), dtype=torch.int64, device=device)
+        rng = None
+        if seed is not None:
+            rng = torch.Generator(device).manual_seed(seed)
         if noise is None:
-            x_t = torch.randn(shape, device=device)
+            x_t = torch.empty(shape, device=device).normal_(generator=rng)
         else:
             x_t = noise.to(device)
         for ti in range(self.timesteps - 1, -1, -1):
             t.fill_(ti)
-            x_t = self.p_sample_step(denoise_fn, x_t, t)
-        return x_t.cpu()
+            x_t = self.p_sample_step(denoise_fn, x_t, t, generator=rng)
+        return x_t
 
     @torch.inference_mode()
     def p_sample_progressive(
             self, denoise_fn, shape, device=torch.device("cpu"), noise=None, pred_freq=50):
-        B, *_ = shape
+        B = (shape or noise.shape)[0]
         t = torch.empty(B, dtype=torch.int64, device=device)
         if noise is None:
             x_t = torch.randn(shape, device=device)
@@ -239,7 +241,7 @@ class GaussianDiffusion:
     def _prior_bpd(self, x_0):
         B, T = len(x_0), self.timesteps
         T_mean, _, T_logvar = self.q_mean_var(
-            x_0=x_0, t=(T - 1) * torch.ones([B, ], dtype=torch.int64))
+            x_0=x_0, t=(T - 1) * torch.ones((B, ), dtype=torch.int64))
         kl_prior = normal_kl(T_mean, T_logvar, mean2=0., logvar2=0.)
         return flat_mean(kl_prior) / math.log(2.)
 
