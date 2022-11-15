@@ -1,6 +1,7 @@
 """
-Use the deterministic generative process proposed by Song et al.[1]
-[1] Song, Jiaming, Chenlin Meng, and Stefano Ermon. "Denoising diffusion implicit models." arXiv preprint arXiv:2010.02502 (2020).
+Use the deterministic generative process proposed by Song et al. (2020) [1]
+[1] Song, Jiaming, Chenlin Meng, and Stefano Ermon. "Denoising Diffusion Implicit Models." International Conference on Learning Representations. 2020.
+source file: https://github.com/ermongroup/ddim/blob/main/runners/diffusion.py, Ln 342-356
 """
 import torch
 import ddpm_torch

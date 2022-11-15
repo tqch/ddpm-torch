@@ -1,9 +1,11 @@
 __pycache__
 .idea
+
+*.ipynb
 .ipynb_checkpoints
+
 test
 precomputed
 figs
 images
 chkpts
-assets/original

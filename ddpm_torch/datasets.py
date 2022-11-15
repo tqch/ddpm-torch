@@ -26,7 +26,6 @@ class CelebA(datasets.VisionDataset):
             self,
             root,
             split,
-            download=False,
             transform=transforms.ToTensor()
     ):
         super().__init__(root, transform=transform)
@@ -44,7 +43,6 @@ class CelebA(datasets.VisionDataset):
             self.filename = splits.index
         else:
             self.filename = [splits.index[i] for i in torch.squeeze(torch.nonzero(mask))]
-        self.download = download
 
     def _load_csv(
             self,
@@ -73,7 +71,7 @@ class CelebA(datasets.VisionDataset):
         if self.transform is not None:
             X = self.transform(X)
 
-        return X, 0
+        return X
 
     def __len__(self):
         return len(self.filename)
@@ -81,6 +79,40 @@ class CelebA(datasets.VisionDataset):
     def extra_repr(self):
         lines = ["Split: {split}", ]
         return "\n".join(lines).format(**self.__dict__)
+
+
+class CelebAHQ(datasets.VisionDataset):
+    """
+    High-Quality version of the CELEBA dataset, consisting of 30000 images in 1024 x 1024 resolution
+    created by Karras et al. (2018) [1]
+    [1] Karras, Tero, et al. "Progressive Growing of GANs for Improved Quality, Stability, and Variation." International Conference on Learning Representations. 2018.
+    """
+    base_folder = "celeba_hq"
+
+    def __init__(
+            self,
+            root,
+            transform=transforms.ToTensor()
+    ):
+        super().__init__(root, transform=transform)
+        self.filename = sorted([
+            fname
+            for fname in os.listdir(os.path.join(root, self.base_folder, "img_celeba_hq"))
+            if fname.endswith(".png")
+        ], key=lambda name: int(name[:-4].zfill(5)))
+        np.random.RandomState(123).shuffle(self.filename)  # legacy order used by ProGAN
+
+    def __getitem__(self, index):
+        X = PIL.Image.open(os.path.join(
+            self.root, self.base_folder, "img_celeba_hq", self.filename[index]))
+
+        if self.transform is not None:
+            X = self.transform(X)
+
+        return X
+
+    def __len__(self):
+        return len(self.filename)
 
 
 DATA_INFO = {
@@ -130,6 +162,18 @@ DATA_INFO = {
         "train": 162770,
         "test": 19962,
         "validation": 19867
+    },
+    "celebahq": {
+        "data": CelebAHQ,
+        "resolution": (256, 256),
+        "channels": 3,
+        "transform": transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ]),
+        "_transform": transforms.PILToTensor(),
+        "all": 30000
     }
 }
 
@@ -180,20 +224,19 @@ def get_dataloader(
         "drop_last": drop_last,
         "num_workers": num_workers
     }
+
+    data_kwargs = {"root": root, "transform": transform}
     if dataset == "celeba":
-        data = DATA_INFO[dataset]["data"](root=root, split=split, transform=transform)
-    else:
-        if split == "test":
-            data = DATA_INFO[dataset]["data"](
-                root=root, train=False, download=False, transform=transform)
-        else:
-            data = DATA_INFO[dataset]["data"](
-                root=root, train=True, download=False, transform=transform)
-            if val_size == 0:
-                assert split == "train"
-            else:
-                train_inds, val_inds = train_val_split(dataset, val_size, random_seed)
-                data = Subset(data, {"train": train_inds, "valid": val_inds}[split])
+        data_kwargs["split"] = split
+    elif dataset in {"mnist", "cifar10"}:
+        data_kwargs["download"] = False
+        data_kwargs["train"] = split != "test"
+    data = DATA_INFO[dataset]["data"](**data_kwargs)
+
+    if data_kwargs.get("train", False) and val_size > 0.:
+        train_inds, val_inds = train_val_split(dataset, val_size, random_seed)
+        data = Subset(data, {"train": train_inds, "valid": val_inds}[split])
+
     dataloader_configs["sampler"] = sampler = DistributedSampler(
         data, shuffle=True, seed=random_seed, drop_last=drop_last) if distributed else None
     dataloader_configs["shuffle"] = (sampler is None) if split in {"train", "all"} else False

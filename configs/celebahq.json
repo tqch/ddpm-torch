@@ -1,0 +1,27 @@
+{
+  "train": {
+    "lr": 2e-5,
+    "batch_size": 64,
+    "grad_norm": 1.0,
+    "epochs": 100,
+    "warmup": 5000
+  },
+  "denoise": {
+    "in_channels": 3,
+    "hid_channels": 128,
+    "ch_multipliers": [1, 1, 2, 2, 4, 4],
+    "num_res_blocks": 2,
+    "apply_attn": [false, false, false, false, true, false],
+    "drop_rate": 0.0,
+    "block_size": 1
+  },
+  "diffusion": {
+    "timesteps": 1000,
+    "beta_start": 0.0001,
+    "beta_end": 0.02,
+    "beta_schedule": "linear",
+    "model_mean_type": "eps",
+    "model_var_type": "fixed-small",
+    "loss_type": "mse"
+  }
+}

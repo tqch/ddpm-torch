@@ -1,5 +1,6 @@
 import os
 import re
+import math
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -57,7 +58,7 @@ class RunningStatistics:
         return out_str.format(self.count, **self.stats)
 
 
-save_image = partial(_save_image, nrow=8, normalize=True, value_range=(-1., 1.))
+save_image = partial(_save_image, normalize=True, value_range=(-1., 1.))
 
 
 class Trainer:
@@ -166,6 +167,7 @@ class Trainer:
     def train(self, evaluator=None, chkpt_path=None, image_dir=None):
 
         num_samples = self.num_save_images
+        nrow = math.floor(math.sqrt(num_samples))
         if num_samples:
             assert num_samples % self.world_size == 0, "Number of samples should be divisible by WORLD_SIZE!"
             shape = (num_samples // self.world_size, ) + self.shape
@@ -183,7 +185,9 @@ class Trainer:
             if isinstance(self.sampler, DistributedSampler):
                 self.sampler.set_epoch(e)
             with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_main) as t:
-                for i, (x, _) in enumerate(t):
+                for i, x in enumerate(t):
+                    if isinstance(x, tuple):
+                        x = x[0]  # exclude labels; unconditional model
                     global_steps += 1
                     self.step(x.to(self.device), global_steps=global_steps)
                     t.set_postfix(self.current_stats)
@@ -207,7 +211,7 @@ class Trainer:
                     x = torch.cat(x_list, dim=0)
                 x = x.cpu()
                 if self.is_main:
-                    save_image(x.cpu(), os.path.join(image_dir, f"{e + 1}.jpg"))
+                    save_image(x.cpu(), os.path.join(image_dir, f"{e + 1}.jpg"), nrow=nrow)
             if not (e + 1) % self.chkpt_intv and chkpt_path and self.is_main:
                 self.save_checkpoint(chkpt_path, epoch=e+1, **results)
             if self.distributed:
@@ -324,3 +328,24 @@ class EMA:
                 f"Unexpected key(s): {', '.join(set.difference(dict_keys, _dict_keys))}"
             )
         self.__dict__.update(state_dict)
+
+
+class ModelWrapper(nn.Module):
+    def __init__(
+            self,
+            model,
+            pre_transform=None,
+            post_transform=None
+    ):
+        super().__init__()
+        self._model = model
+        self.pre_transform = pre_transform
+        self.post_transform = post_transform
+
+    def forward(self, x, *args, **kwargs):
+        if self.pre_transform is not None:
+            x = self.pre_transform(x)
+        out = self._model(x, *args, **kwargs)
+        if self.post_transform is not None:
+            out = self.post_transform(out)
+        return out
