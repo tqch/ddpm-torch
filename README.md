@@ -17,18 +17,27 @@
 
 ## Requirements
 
-- torch >= 1.12.0
-- torchvision >= 1.13.0
-- scipy >= 1.7.3
+- torch>=1.12.0
+- torchvision>=1.13.0
+- scipy>=1.7.3
 
 
 ## Code usage
 
-### Toy data
-
-<details>
-<summary>Expand</summary>
-<pre><code>
+<p align="center">
+	<table width="100%">
+		<tr>
+			<th width="25%" align="center">Toy data</th>
+			<th width="75%" colspan="3" align="center">Real-world data&emsp;</th>
+		</tr><tr>
+			<th align="center">Training</th>
+			<th align="center">Training</th>
+			<th align="center">Generation</th>
+			<th align="center">Evaluation</th>
+		</tr>
+			<td><details>
+			<summary>Expand</summary>
+			<pre><code>
 usage: train_toy.py [-h] [--dataset {gaussian8,gaussian25,swissroll}]      
                     [--size SIZE] [--root ROOT] [--epochs EPOCHS] [--lr LR]
                     [--beta1 BETA1] [--beta2 BETA2] [--lr-warmup LR_WARMUP]
@@ -39,26 +48,26 @@ usage: train_toy.py [-h] [--dataset {gaussian8,gaussian25,swissroll}]
                     [--model-var-type {learned,fixed-small,fixed-large}]   
                     [--loss-type {kl,mse}] [--image-dir IMAGE_DIR]         
                     [--chkpt-dir CHKPT_DIR] [--chkpt-intv CHKPT_INTV]      
-                    [--eval-intv EVAL_INTV] [--seed SEED] [--resume]
-                    [--device DEVICE] [--mid-features MID_FEATURES]
-                    [--num-temporal-layers NUM_TEMPORAL_LAYERS]
-optional arguments:
-  -h, --help            show this help message and exit
-  --dataset {gaussian8,gaussian25,swissroll}
-  --size SIZE
-  --root ROOT           root directory of datasets
-  --epochs EPOCHS       total number of training epochs
-  --lr LR               learning rate
-  --beta1 BETA1         beta_1 in Adam
-  --beta2 BETA2         beta_2 in Adam
-  --lr-warmup LR_WARMUP
-                        number of warming-up epochs
-  --batch-size BATCH_SIZE
-  --timesteps TIMESTEPS
-                        number of diffusion steps
-  --beta-schedule {quad,linear,warmup10,warmup50,jsd}
-  --beta-start BETA_START
-  --beta-end BETA_END
+                    [--eval-intv EVAL_INTV] [--seed SEED] [--resume]       
+                    [--device DEVICE] [--mid-features MID_FEATURES]        
+                    [--num-temporal-layers NUM_TEMPORAL_LAYERS]            
+optional arguments:                                                        
+  -h, --help            show this help message and exit                    
+  --dataset {gaussian8,gaussian25,swissroll}                               
+  --size SIZE                                                              
+  --root ROOT           root directory of datasets                         
+  --epochs EPOCHS       total number of training epochs                    
+  --lr LR               learning rate                                      
+  --beta1 BETA1         beta_1 in Adam                                     
+  --beta2 BETA2         beta_2 in Adam                                     
+  --lr-warmup LR_WARMUP                                                    
+                        number of warming-up epochs                        
+  --batch-size BATCH_SIZE                                                  
+  --timesteps TIMESTEPS                                                    
+                        number of diffusion steps                          
+  --beta-schedule {quad,linear,warmup10,warmup50,jsd}                      
+  --beta-start BETA_START                                                  
+  --beta-end BETA_END                                                      
   --model-mean-type {mean,x_0,eps}
   --model-var-type {learned,fixed-small,fixed-large}
   --loss-type {kl,mse}
@@ -72,52 +81,33 @@ optional arguments:
   --device DEVICE
   --mid-features MID_FEATURES
   --num-temporal-layers NUM_TEMPORAL_LAYERS
-</code></pre>
-</details>
-
-### Real-world data
-
-<details><summary>Expand</summary>
-<pre><code>
-usage: train.py [-h] [--dataset {mnist,cifar10,celeba}] [--root ROOT]        
-                [--epochs EPOCHS] [--lr LR] [--beta1 BETA1] [--beta2 BETA2]  
+                </code></pre>
+            </details>
+			</td><td>
+			<details>
+				<summary>Expand</summary>
+				<pre><code>
+usage: train.py [-h] [--dataset {mnist,cifar10,celeba,celebahq}] [--root ROOT]
+                [--epochs EPOCHS] [--lr LR] [--beta1 BETA1] [--beta2 BETA2]
                 [--batch-size BATCH_SIZE] [--num-accum NUM_ACCUM]
-                [--timesteps TIMESTEPS]
-                [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]        
+                [--block-size BLOCK_SIZE] [--timesteps TIMESTEPS]
+                [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]
                 [--beta-start BETA_START] [--beta-end BETA_END]
                 [--model-mean-type {mean,x_0,eps}]
                 [--model-var-type {learned,fixed-small,fixed-large}]
                 [--loss-type {kl,mse}] [--num-workers NUM_WORKERS]
-                [--train-device TRAIN_DEVICE] [--eval-device EVAL_DEVICE]    
+                [--train-device TRAIN_DEVICE] [--eval-device EVAL_DEVICE]
                 [--image-dir IMAGE_DIR] [--image-intv IMAGE_INTV]
                 [--num-save-images NUM_SAVE_IMAGES] [--config-dir CONFIG_DIR]
                 [--chkpt-dir CHKPT_DIR] [--chkpt-name CHKPT_NAME]
-                [--chkpt-intv CHKPT_INTV] [--seed SEED] [--resume]           
-                [--chkpt-path CHKPT_PATH] [--eval] [--use-ema]               
-                [--ema-decay EMA_DECAY] [--distributed]                      
-optional arguments:                                                          
+                [--chkpt-intv CHKPT_INTV] [--seed SEED] [--resume]
+                [--chkpt-path CHKPT_PATH] [--eval] [--use-ema]
+                [--ema-decay EMA_DECAY] [--distributed] [--rigid-run]
+                [--num-gpus NUM_GPUS]
+optional arguments:
   -h, --help            show this help message and exit
-  --dataset {mnist,cifar10,celeba}
+  --dataset {mnist,cifar10,celeba,celebahq}
   --root ROOT           root directory of datasets
-  --epochs EPOCHS       total number of training epochs
-  --lr LR               learning rate
-  --beta1 BETA1         beta_1 in Adam
-  --beta2 BETA2         beta_2 in Adam
-  --batch-size BATCH_SIZE
-  --num-accum NUM_ACCUM
-                        number of workers for data loading
-  --train-device TRAIN_DEVICE
-  --eval-device EVAL_DEVICE
-  --image-dir IMAGE_DIR
-  --image-intv IMAGE_INTV
-  --num-save-images NUM_SAVE_IMAGES
-                        number of images to generate & save
-  --config-dir CONFIG_DIR
-  --chkpt-dir CHKPT_DIR
-  --chkpt-name CHKPT_NAME
-  --chkpt-intv CHKPT_INTV
-                        frequency of saving a checkpoint
-  --seed SEED           random seed
   --resume              to resume training from a checkpoint
   --chkpt-path CHKPT_PATH
                         checkpoint path used to resume training
@@ -126,21 +116,117 @@ optional arguments:
   --ema-decay EMA_DECAY
                         decay factor of ema
   --distributed         whether to use distributed training
-</code></pre>
-</details>
+  --rigid-run           whether not to use elastic launch
+  --num-gpus NUM_GPUS   number of gpus for distributed training
+            	</code></pre>
+            </details>
+			</td><td>
+			<details>
+			<summary>Expand</summary>
+			<pre><code>
+usage: generate.py [-h] [--dataset {mnist,cifar10,celeba}]
+                   [--batch-size BATCH_SIZE] [--total-size TOTAL_SIZE]
+                   [--config-dir CONFIG_DIR] [--chkpt-dir CHKPT_DIR]
+                   [--chkpt-path CHKPT_PATH] [--save-dir SAVE_DIR]
+                   [--device DEVICE] [--use-ema] [--use-ddim] [--eta ETA]
+                   [--skip-schedule SKIP_SCHEDULE] [--subseq-size SUBSEQ_SIZE]
+                   [--suffix SUFFIX]
+optional arguments:
+  -h, --help            show this help message and exit
+  --dataset {mnist,cifar10,celeba}
+  --batch-size BATCH_SIZE
+  --total-size TOTAL_SIZE
+  --config-dir CONFIG_DIR
+  --chkpt-dir CHKPT_DIR
+  --chkpt-path CHKPT_PATH
+  --save-dir SAVE_DIR
+  --device DEVICE
+  --use-ema
+  --use-ddim
+  --eta ETA
+  --skip-schedule SKIP_SCHEDULE
+  --subseq-size SUBSEQ_SIZE
+  --suffix SUFFIX
+			</pre></code>
+			</details>
+			</td><td>
+			<details>
+			<summary>Expand</summary>
+			<pre><code>
+usage: eval.py [-h] [--root ROOT] [--dataset {mnist,cifar10,celeba}]
+               [--model-device MODEL_DEVICE] [--eval-device EVAL_DEVICE]
+               [--eval-batch-size EVAL_BATCH_SIZE]
+               [--eval-total-size EVAL_TOTAL_SIZE] [--num-workers NUM_WORKERS]
+               [--nhood-size NHOOD_SIZE] [--row-batch-size ROW_BATCH_SIZE]
+               [--col-batch-size COL_BATCH_SIZE] [--device DEVICE]
+               [--eval-dir EVAL_DIR] [--precomputed-dir PRECOMPUTED_DIR]
+               [--metrics METRICS [METRICS ...]] [--seed SEED]
+               [--folder-name FOLDER_NAME]
+optional arguments:
+  -h, --help            show this help message and exit
+  --root ROOT
+  --dataset {mnist,cifar10,celeba}
+  --model-device MODEL_DEVICE
+  --eval-device EVAL_DEVICE
+  --eval-batch-size EVAL_BATCH_SIZE
+  --eval-total-size EVAL_TOTAL_SIZE
+  --num-workers NUM_WORKERS
+  --nhood-size NHOOD_SIZE
+  --row-batch-size ROW_BATCH_SIZE
+  --col-batch-size COL_BATCH_SIZE
+  --device DEVICE
+  --eval-dir EVAL_DIR
+  --precomputed-dir PRECOMPUTED_DIR
+  --metrics METRICS [METRICS ...]
+  --seed SEED
+  --folder-name FOLDER_NAME
+			</pre></code>
+			</details>
+			</td>
+		</tr>
+	</table>
+</p>
 
-### Examples
-```shell
-# train a 25-Gaussian toy model with single gpu for a total of 100 epochs
-python train_toy.py --dataset gaussian8 --device cuda:0 --epochs 100
+**Examples**
 
-# train a cifar10 model with single gpu for a total of 50 epochs
-python train.py --dataset cifar10 --train-device cuda:0 --epochs 50
+- Train a 25-Gaussian toy model with single GPU (device id: 0) for a total of 100 epochs
+    ```shell
+    python train_toy.py --dataset gaussian25 --device cuda:0 --epochs 100
+    ```
 
-# train a celeba model with 2 gpus and an effective batch-size of 64 x 2 = 128
-export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv_backend c10d train.py --dataset celeba --use-ema --distributed
-```
+- Train CIFAR-10 model with single GPU (device id: 0) for a total of 50 epochs
+    ```shell
+    python train.py --dataset cifar10 --train-device cuda:0 --epochs 50
+    ```
 
+- Train a CelebA model with an effective batch size of 64 x 2 x 4 = 128 on a four-card machine (single node) using shared file-system initialization
+    ```shell
+    python train.py --dataset celeba --use-ema --num-accum 2 --num-gpus 4 --distributed --rigid-run
+    ```
+    - `use-ema`: use exponential moving average (0.9999 decay by default)
+    - `num-accum 2`: accumulate gradients for 2 mini-batches
+    - `num-gpus`: number of GPU(s) to use for training, i.e. `WORLD_SIZE` of the process group
+    - `distributed`: enable multi-gpu DDP training
+    - `rigid-run`: use shared-file system initialization and `torch.multiprocessing`
+
+- (**Recommended**) Train a CelebA model with an effective batch-size of 64 x 1 x 2 = 128 using only two GPUs with `torchrun` Elastic Launch[^6] (TCP initialization)
+    ```shell
+    export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv_backend c10d train.py --dataset celeba --distributed
+    ```
+
+- Generate 50,000 samples (128 per mini-batch) of the EMA checkpoint located at `./chkpts/train/ddpm_cifar10_2160.pt` using DDIM sampler and save the results to `./images/eval/cifar10_2160`
+	```shell
+	python generate.py --dataset cifar10 --chkpt-path ./chkpt/train/ddpm_cifar10_2160.pt --use-ema --use-ddim --skip-schedule quadratic --subseq-size 100 --suffix _2160
+	```
+    - `use-ddim`: use DDIM
+    - `skip-schedule quadratic`: use the quadratic schedule
+    - `subseq-size`: length of sub-sequence, i.e. DDIM timesteps
+    - `suffix`: suffix string to the dataset name in the folder name
+
+- Evaluate FID, Precision/Recall of generated samples under `./images/eval/cifar10_2160`
+	```shell
+	python eval.py --dataset cifar10 --folder-name cifar10_2160
+	```
 
 ## Experiment results
 
@@ -150,19 +236,26 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 	<table width="100%">
 		<tr>
 			<th width="10%"><b>Dataset</b></th>
-			<th width="30%">8 Gaussian</th>
-			<th width="30%">25 Gaussian</th>
-			<th width="30%">Swiss Roll</th>
+			<th width="30%" align="center">8&nbsp;Gaussian</th>
+			<th width="30%" align="center">25&nbsp;Gaussian</th>
+			<th width="30%" align="center">Swiss&nbsp;Roll</th>
 		</tr><tr>
 			<td><b>True</b></td>
-			<td><img alt="gaussian8_true" src="./assets/toy/gaussian8_true.jpg"></td>
-			<td><img alt="gaussian25_true" src="./assets/toy/gaussian25_true.jpg"></td>
-			<td><img alt="swissroll_true" src="./assets/toy/swissroll_true.jpg"></td>
+			<td><a href="./assets/toy/gaussian8_true.jpg">
+			<img alt="gaussian8_true_thumbnail" src="./assets/thumbnails/toy/gaussian8_true.jpg">
+			</a></td>
+			<td><a href="./assets/toy/gaussian25_true.jpg">
+			<img alt="gaussian25_true_thumbnail" src="./assets/thumbnails/toy/gaussian25_true.jpg"></a></td>
+			<td><a href="./assets/toy/swissroll_true.jpg">
+			<img alt="swissroll_true_thumbnail" src="./assets/thumbnails/toy/swissroll_true.jpg"></a></td>
 		</tr><tr>
 			<td><b>Generated</b></td>
-			<td><img alt="gaussian8_gen" src="./assets/toy/gaussian8_gen.jpg"></td>
-			<td><img alt="gaussian25_gen" src="./assets/toy/gaussian25_gen.jpg"></td>
-			<td><img alt="swissroll_gen" src="./assets/toy/swissroll_gen.jpg"></td>
+			<td><a href="./assets/toy/gaussian8_gen.jpg">
+			<img alt="gaussian8_true_thumbnail" src="./assets/thumbnails/toy/gaussian8_gen.jpg"></a></td>
+			<td><a href="./assets/toy/gaussian25_gen.jpg">
+			<img alt="gaussian25_true_thumbnail" src="./assets/thumbnails/toy/gaussian25_gen.jpg"></a></td>
+			<td><a href="./assets/toy/swissroll_gen.jpg">
+			<img alt="swissroll_true_thumbnail" src="./assets/thumbnails/toy/swissroll_gen.jpg"></a></td>
 		</tr>
 	</table>
 </p>
@@ -173,14 +266,17 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
         <table width="100%">
             <tr>
                 <th width="10%"><b>Dataset</b></th>
-                <th width="30%">8 Gaussian</th>
-                <th width="30%">25 Gaussian</th>
-                <th width="30%">Swiss Roll</th>
+                <th width="30%" align="center">8&nbsp;Gaussian</th>
+                <th width="30%" align="center">25&nbsp;Gaussian</th>
+                <th width="30%" align="center">Swiss&nbsp;Roll</th>
             </tr><tr>
                 <td><b>Generated</b></td>
-                <td><img alt="gaussian8_train_anim" src="./assets/toy/gaussian8_train.webp"></td>
-                <td><img alt="gaussian25_train_anim" src="./assets/toy/gaussian25_train.webp"></td>
-                <td><img alt="swissroll_train_anim" src="./assets/toy/swissroll_train.webp"></td>
+                <td><a href="./assets/toy/gaussian8_train.webp">
+				<img alt="gaussian8_train_thumbnail" src="./assets/thumbnails/toy/gaussian8_train.webp"></a></td>
+                <td><a href="./assets/toy/gaussian25_train.webp">
+				<img alt="gaussian25_train_thumbnail" src="./assets/thumbnails/toy/gaussian25_train.webp"></a></td>
+                <td><a href="./assets/toy/swissroll_train.webp">
+				<img alt="swissroll_train_thumbnail" src="./assets/thumbnails/toy/swissroll_train.webp"></a></td>
             </tr>
         </table>
     </p>
@@ -193,81 +289,81 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 <p align="center">
     <table width="100%">
         <tr>
-            <th>Dataset</th>
-            <th>FID (↓)</th>
-            <th>Precision (↑)</th>
-            <th>Recall (↑)</th>
-            <th>Training steps</th>
-            <th>Training loss</th>
-            <th>Checkpoint</th>
+            <th align="center">Dataset</th>
+            <th align="center">FID (↓)</th>
+            <th align="center">Precision (↑)</th>
+            <th align="center">Recall (↑)</th>
+            <th align="center">Training steps</th>
+            <th align="center">Training loss</th>
+            <th align="center">Checkpoint</th>
         </tr><tr>
-            <td>CIFAR-10</td>
-            <td>9.23</td>
-            <td>0.692</td>
-            <td>0.473</td>
-            <td>46.8k</td>
-            <td>0.0302</td>
-			<td>-</td>
+            <td align="center">CIFAR-10</td>
+            <td align="center">9.23</td>
+            <td align="center">0.692</td>
+            <td align="center">0.473</td>
+            <td align="center">46.8k</td>
+            <td align="center">0.0302</td>
+			<td align="center">-</td>
         </tr>
         <tr>
-            <td>&emsp;|__</td>
-            <td>6.02</td>
-            <td>0.693</td>
-            <td>0.510</td>
-            <td>93.6k</td>
-            <td>0.0291</td>
-            <td>-</td>
+            <td align="center">|__</td>
+            <td align="center">6.02</td>
+            <td align="center">0.693</td>
+            <td align="center">0.510</td>
+            <td align="center">93.6k</td>
+            <td align="center">0.0291</td>
+            <td align="center">-</td>
         </tr><tr>
-            <td>&emsp;|__</td>
-            <td>4.04</td>
-            <td>0.701</td>
-            <td>0.550</td>
-            <td>234.0k</td>
-            <td>0.0298</td>
-            <td>-</td>
+            <td align="center">|__</td>
+            <td align="center">4.04</td>
+            <td align="center">0.701</td>
+            <td align="center">0.550</td>
+            <td align="center">234.0k</td>
+            <td align="center">0.0298</td>
+            <td align="center">-</td>
         </tr><tr>
-            <td>&emsp;|__</td>
-            <td>3.36</td>
-            <td>0.717</td>
-            <td><b>0.559</b></td>
-            <td>468.0k</td>
-            <td>0.0284</td>
-            <td>-</td>
+            <td align="center">|__</td>
+            <td align="center">3.36</td>
+            <td align="center">0.717</td>
+            <td align="center"><b>0.559</b></td>
+            <td align="center">468.0k</td>
+            <td align="center">0.0284</td>
+            <td align="center">-</td>
         </tr>
         <tr>
-            <td>&emsp;|__</td>
-            <td><b>3.25</b></td>
-            <td><b>0.736</b></td>
-            <td>0.548</td>
-            <td>842.4k</td>
-            <td><b>0.0277</b></td>
-            <td><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_cifar10_2160.pt">[Link]</a></td>
+            <td align="center">|__</td>
+            <td align="center"><b>3.25</b></td>
+            <td align="center"><b>0.736</b></td>
+            <td align="center">0.548</td>
+            <td align="center">842.4k</td>
+            <td align="center"><b>0.0277</b></td>
+            <td align="center"><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_cifar10_2160.pt">[Link]</a></td>
         </tr><tr>
-            <td>CelebA</td>
-            <td>4.81</td>
-            <td><b>0.766</b></td>
-            <td>0.490</td>
-            <td>189.8k</td>
-            <td>0.0153</td>
-			<td>-</td>
+            <td align="center">CelebA</td>
+            <td align="center">4.81</td>
+            <td align="center"><b>0.766</b></td>
+            <td align="center">0.490</td>
+            <td align="center">189.8k</td>
+            <td align="center">0.0153</td>
+			<td align="center">-</td>
         </tr>
         <tr>
-            <td>&emsp;|__</td>
-            <td>3.88</td>
-            <td>0.760</td>
-            <td>0.516</td>
-            <td>379.7k</td>
-            <td>0.0151</td>
-			<td>-</td>
+            <td align="center">|__</td>
+            <td align="center">3.88</td>
+            <td align="center">0.760</td>
+            <td align="center">0.516</td>
+            <td align="center">379.7k</td>
+            <td align="center">0.0151</td>
+			<td align="center">-</td>
         </tr>
         <tr>
-            <td>&emsp;|__</td>
-            <td><b>3.07</b></td>
-            <td>0.754</td>
-            <td><b>0.540</b></td>
-            <td>949.2k</td>
-            <td><b>0.0147</b></td>
-			<td><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_celeba_600.pt">[Link]</a></td>
+            <td align="center">|__</td>
+            <td align="center"><b>3.07</b></td>
+            <td align="center">0.754</td>
+            <td align="center"><b>0.540</b></td>
+            <td align="center">949.2k</td>
+            <td align="center"><b>0.0147</b></td>
+			<td align="center"><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_celeba_600.pt">[Link]</a></td>
         </tr>
     </table>
 </p>
@@ -276,12 +372,16 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 	<table width="100%">
             <tr>
                 <th width="10%">Dataset</th>
-                <th width="45%">CIFAR-10</td>
-                <th width="45%">CelebA</td>
+                <th width="45%" align="center">CIFAR-10</td>
+                <th width="45%" align="center">CelebA</td>
             </tr><tr>
                 <td><b>Generated images</b></td>
-                <td><img alt="cifar10_gen" src="./assets/cifar10_gen.jpg" height="100%" width="100%"></td>
-                <td><img alt="celeba_gen" src="./assets/celeba_gen.jpg" height="100%" width="100%"></td>
+                <td><a href="./assets/cifar10_gen.png">
+                <img alt="cifar10_gen" src="./assets/cifar10_gen.png" height="100%" width="100%">
+                </a></td>
+                <td><a href="./assets/celeba_gen.png" >
+                <img alt="celeba_gen_thumbnail" src="./assets/thumbnails/celeba_gen.png" height="100%" width="100%">
+                </a></td>
             </tr>
 	</table>
 </p>
@@ -291,12 +391,16 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
         <table width="100%">
             <tr>
                 <th width="10%">Dataset</th>
-                <th width="45%">CIFAR-10</td>
-                <th width="45%">CelebA</td>
+                <th width="45%" align="center">CIFAR-10</td>
+                <th width="45%" align="center">CelebA</td>
             </tr><tr>
                 <td><b>Generated images</b></td>
-                <td><img alt="cifar10_train_anim" src="./assets/cifar10_train.webp" height="100%" width="100%"></td>
-                <td><img alt="celeba_train_anim" src="./assets/celeba_train.webp" height="100%" width="100%"></td>
+                <td><a href="./assets/cifar10_train.webp" >
+                <img alt="cifar10_train" src="./assets/cifar10_train.webp" height="100%" width="100%">
+                </a></td>
+                <td><a href="./assets/celeba_train.webp" >
+                <img alt="celeba_train_thumbnail" src="./assets/thumbnails/celeba_train.webp" height="100%" width="100%">
+                </a></td>
             </tr>
         </table>
     </p>
@@ -305,15 +409,20 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 <details>
 	<summary>Denoising process (animated)</summary>
     <p align="center">
-        <table width="100%"">
-            <tr>
+        <table width="100%">
+        	<tr>
                 <th width="10%">Dataset</th>
-                <th width="45%">CIFAR-10</td>
-                <th width="45%">CelebA</td>
+                <th width="45%" align="center">CIFAR-10</td>
+                <th width="45%" align="center">CelebA</td>
             </tr><tr>
                 <td><b>Generated images</b></td>
-                <td><img alt="cifar10_denoise_anim" src="./assets/cifar10_denoise.webp" height="100%" width="100%"></td>
-                <td><img alt="celeba_denoise_anim" src="./assets/celeba_denoise.webp" height="100%" width="100%"></td>
+                <td>
+                <a href="./assets/cifar10_denoise.webp">
+                <img alt="cifar10_denoise" src="./assets/cifar10_denoise.webp" height="100%" width="100%">
+                </a></td>
+                <td><a href="./assets/celeba_denoise.webp" >
+                <img alt="celeba_denoise_thumbnail" src="./assets/thumbnails/celeba_denoise.webp" height="100%" width="100%">
+                </a></td>
             </tr>
         </table>
     </p>
@@ -331,3 +440,5 @@ export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv
 [^3]: Heusel, Martin, et al. "Gans trained by a two time-scale update rule converge to a local nash equilibrium." Advances in neural information processing systems 30 (2017).
 [^4]: Kynkäänniemi, Tuomas, et al. "Improved precision and recall metric for assessing generative models." Advances in Neural Information Processing Systems 32 (2019).
 [^5]: DistributedDataParallel - PyTorch 1.12 Documentation, https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html.
+[^6]: Torchrun (Elastic Launch) - PyTorch 1.12 Documentation*, https://pytorch.org/docs/stable/elastic/run.html. 
+

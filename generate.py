@@ -12,7 +12,6 @@ if __name__ == "__main__":
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
-    parser.add_argument("--root", default="~/datasets", type=str)
     parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba"], default="cifar10")
     parser.add_argument("--batch-size", default=128, type=int)
     parser.add_argument("--total-size", default=50000, type=int)
@@ -31,8 +30,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     dataset = args.dataset
-    root = os.path.expanduser("~/datasets")
-
     in_channels = DATA_INFO[dataset]["channels"]
     image_res = DATA_INFO[dataset]["resolution"][0]
 
