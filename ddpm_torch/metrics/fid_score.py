@@ -60,6 +60,7 @@ from .inception import InceptionV3
 import io
 import requests
 import torch.nn as nn
+import torch.utils.data
 from torchvision import transforms
 
 IMAGE_RES = 299
@@ -141,12 +142,12 @@ class InceptionStatistics(nn.Module):
 
 PRE_COMPUTED_LIST = {
     # "cropped_celeba": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_celeba.npz",
-    "cropped_celeba": "https://github.com/tqch/VAEGAN/releases/download/precomputed_statistics_celeba/fid_stats_celeba_148x148.npz",
+    "cropped_celeba": "https://github.com/tqch/VAEGAN/releases/download/precomputed_statistics_celeba/fid_stats_celeba_148x148.npz",  # noqa
     "lsun_bedroom": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_lsun_train.npz",
     "cifar10": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_cifar10_train.npz",
     "svhn": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_svhn_train.npz",
     "imagenet_train": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_imagenet_train.npz",
-    "imagenet_train": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_imagenet_valid.npz"
+    "imagenet_valid": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_imagenet_valid.npz"
 }
 
 

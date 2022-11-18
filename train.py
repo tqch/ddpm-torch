@@ -4,8 +4,8 @@ import torch
 import tempfile
 from datetime import datetime
 from functools import partial
-from torch.optim import Adam, lr_scheduler
 from ddpm_torch import *
+from torch.optim import Adam, lr_scheduler
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -242,6 +242,7 @@ def main():
     args = parser.parse_args()
 
     if args.distributed and args.rigid_run:
+        mp.set_start_method("spawn")
         with tempfile.TemporaryDirectory() as temp_dir:
             mp.spawn(train, args=(args, temp_dir), nprocs=args.num_gpus)
     else:

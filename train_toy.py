@@ -25,7 +25,7 @@ if __name__ == "__main__":
     parser.add_argument("--beta-start", default=0.001, type=float)
     parser.add_argument("--beta-end", default=0.2, type=float)
     parser.add_argument("--model-mean-type", choices=["mean", "x_0", "eps"], default="eps", type=str)
-    parser.add_argument("--model-var-type", choices=["learned", "fixed-small", "fixed-large"], default="fixed-large", type=str)
+    parser.add_argument("--model-var-type", choices=["learned", "fixed-small", "fixed-large"], default="fixed-large", type=str)  # noqa
     parser.add_argument("--loss-type", choices=["kl", "mse"], default="mse", type=str)
     parser.add_argument("--image-dir", default="./images/train", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)

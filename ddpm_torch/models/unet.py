@@ -1,8 +1,15 @@
 import math
 import torch
 import torch.nn as nn
-from ..modules import Linear, Conv2d, SamePad2d, Sequential
-from ..functions import get_timestep_embedding
+try:
+    from ..modules import Linear, Conv2d, SamePad2d, Sequential
+    from ..functions import get_timestep_embedding
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from ddpm_torch.modules import Linear, Conv2d, SamePad2d, Sequential
+    from ddpm_torch.functions import get_timestep_embedding
 
 
 DEFAULT_NONLINEARITY = nn.SiLU()  # f(x)=x*sigmoid(x)
@@ -38,7 +45,8 @@ class AttentionBlock(nn.Module):
         B, C, H, W = q.shape
         w = torch.einsum("bchw, bcHW -> bhwHW", q, k)
         w = torch.softmax(
-            w.reshape(B, H, W, H * W) / math.sqrt(C), dim=-1).reshape(B, H, W, H, W)
+            w.reshape(B, H, W, H * W) / math.sqrt(C), dim=-1
+        ).reshape(B, H, W, H, W)
         out = torch.einsum("bhwHW, bcHW -> bchw", w, v)
         return out
 
@@ -134,21 +142,20 @@ class UNet(nn.Module):
         )
 
     def get_level_block(self, level):
-        embed_dim = self.time_embedding_dim
-        drop_rate = self.drop_rate
+        block_kwargs = {"embed_dim": self.time_embedding_dim, "drop_rate": self.drop_rate}
         if self.apply_attn[level]:
             def block(in_chans, out_chans):
                 return Sequential(
-                    ResidualBlock(in_chans, out_chans, embed_dim=embed_dim, drop_rate=drop_rate),
+                    ResidualBlock(in_chans, out_chans, **block_kwargs),
                     AttentionBlock(out_chans))
         else:
             def block(in_chans, out_chans):
-                return ResidualBlock(in_chans, out_chans, embed_dim=embed_dim, drop_rate=drop_rate)
+                return ResidualBlock(in_chans, out_chans, **block_kwargs)
         return block
 
     def downsample_level(self, level):
         block = self.get_level_block(level)
-        prev_chans = self.hid_channels if level == 0 else self.ch_multipliers[level-1] * self.hid_channels
+        prev_chans = (self.ch_multipliers[level-1] if level else 1) * self.hid_channels
         curr_chans = self.ch_multipliers[level] * self.hid_channels
         modules = nn.ModuleList([block(prev_chans, curr_chans)])
         for _ in range(self.num_res_blocks - 1):
@@ -156,7 +163,7 @@ class UNet(nn.Module):
         if level != self.levels - 1:
             if self.resample_with_conv:
                 downsample = Sequential(
-                    SamePad2d(3, 2),
+                    SamePad2d(3, 2),  # custom same padding
                     Conv2d(curr_chans, curr_chans, 3, 2))
             else:
                 downsample = nn.AvgPool2d(2)
@@ -166,7 +173,7 @@ class UNet(nn.Module):
     def upsample_level(self, level):
         block = self.get_level_block(level)
         ch = self.hid_channels
-        chs = list(map(lambda x: ch*x, self.ch_multipliers))
+        chs = list(map(lambda x: ch * x, self.ch_multipliers))
         next_chans = ch if level == 0 else chs[level - 1]
         prev_chans = chs[-1] if level == self.levels - 1 else chs[level + 1]
         curr_chans = chs[level]
@@ -175,8 +182,20 @@ class UNet(nn.Module):
             modules.append(block(2 * curr_chans, curr_chans))
         modules.append(block(next_chans + curr_chans, curr_chans))
         if level != 0:
-            # Note: the official TensorFlow implementation specifies `align_corners=True`
-            # However, PyTorch does not support align_corners for nearest interpolation
+            """
+            Note: the official TensorFlow implementation specifies `align_corners=True`
+            However, PyTorch does not support align_corners for nearest interpolation
+            to see the difference, run the following example:
+            ---------------------------------------------------------------------------
+            import numpy as np
+            import torch
+            import tensorflow as tf
+            
+            x = np.arange(9.).reshape(3, 3)
+            print(torch.nn.functional.interpolate(torch.as_tensor(x).reshape(1, 1, 3, 3), size=7, mode="nearest"))  # asymmetric
+            print(tf.squeeze(tf.compat.v1.image.resize(tf.reshape(tf.convert_to_tensor(x), shape=(3, 3, 1)), size=(7, 7), method="nearest", align_corners=True)))  # symmetric
+            ---------------------------------------------------------------------------
+            """ # noqa
             upsample = [nn.Upsample(scale_factor=2, mode="nearest")]
             if self.resample_with_conv:
                 upsample.append(Conv2d(curr_chans, curr_chans, 3, 1, 1))
@@ -191,7 +210,7 @@ class UNet(nn.Module):
         hs = [self.in_conv(x)]
         for i in range(self.levels):
             downsample = self.downsamples[f"level_{i}"]
-            for j, layer in enumerate(downsample):
+            for j, layer in enumerate(downsample):  # noqa
                 h = hs[-1]
                 if j != self.num_res_blocks:
                     hs.append(layer(h, t_emb=t_emb))
@@ -204,7 +223,7 @@ class UNet(nn.Module):
         # upsample
         for i in range(self.levels-1, -1, -1):
             upsample = self.upsamples[f"level_{i}"]
-            for j, layer in enumerate(upsample):
+            for j, layer in enumerate(upsample):  # noqa
                 if j != self.num_res_blocks + 1:
                     h = layer(torch.cat([h, hs.pop()], dim=1), t_emb=t_emb)
                 else:

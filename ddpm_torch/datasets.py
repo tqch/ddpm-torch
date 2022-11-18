@@ -13,12 +13,12 @@ CONDITIONAL = False
 
 
 def crop_celeba(img):
-    return transforms.functional.crop(img, top=40, left=15, height=148, width=148)
+    return transforms.functional.crop(img, top=40, left=15, height=148, width=148)  # noqa
 
 
 class CelebA(datasets.VisionDataset):
     """
-    Large-scale CelebFaces Attributes (CelebA) Dataset <http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html>
+    Large-scale CelebFaces Attributes (CelebA) Dataset <https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html>
     """
     base_folder = "celeba"
 
@@ -65,7 +65,7 @@ class CelebA(datasets.VisionDataset):
         return CSV(headers, indices, torch.as_tensor(data_int))
 
     def __getitem__(self, index):
-        X = PIL.Image.open(os.path.join(
+        X = PIL.Image.open(os.path.join(  # noqa
             self.root, self.base_folder, "img_align_celeba", self.filename[index]))
 
         if self.transform is not None:
@@ -86,7 +86,7 @@ class CelebAHQ(datasets.VisionDataset):
     High-Quality version of the CELEBA dataset, consisting of 30000 images in 1024 x 1024 resolution
     created by Karras et al. (2018) [1]
     [1] Karras, Tero, et al. "Progressive Growing of GANs for Improved Quality, Stability, and Variation." International Conference on Learning Representations. 2018.
-    """
+    """  # noqa
     base_folder = "celeba_hq"
 
     def __init__(
@@ -103,7 +103,7 @@ class CelebAHQ(datasets.VisionDataset):
         np.random.RandomState(123).shuffle(self.filename)  # legacy order used by ProGAN
 
     def __getitem__(self, index):
-        X = PIL.Image.open(os.path.join(
+        X = PIL.Image.open(os.path.join(  # noqa
             self.root, self.base_folder, "img_celeba_hq", self.filename[index]))
 
         if self.transform is not None:
@@ -192,7 +192,7 @@ def train_val_split(dataset, val_size, random_seed=None):
 
 
 class SubsetSequentialSampler(Sampler):
-    def __init__(self, indices):
+    def __init__(self, indices):  # noqa
         self.indices = indices
 
     def __iter__(self):

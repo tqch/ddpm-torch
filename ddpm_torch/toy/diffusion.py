@@ -29,7 +29,7 @@ class GaussianDiffusion(diffusion.GaussianDiffusion):
 
         # calculate the mean estimate
         _clip = lambda x: x  # (lambda x: x.clamp(-3., 3.)) if clip_denoised else (lambda x: x)
-        if self.model_mean_type == "mean":
+        if self.model_mean_type == "mean":  # noqa
             pred_x_0 = _clip(self._pred_x_0_from_mean(x_t=x_t, mean=out, t=t))
             model_mean = out
         elif self.model_mean_type == "x_0":
@@ -53,7 +53,7 @@ class GaussianDiffusion(diffusion.GaussianDiffusion):
         # calculate L_t
         # t = 0: negative log likelihood of decoder, -\log p(x_0 | x_1)
         # t > 0: variational lower bound loss term, KL term
-        true_mean, _, true_logvar = self.q_posterior_mean_var(x_0=x_0, x_t=x_t, t=t)
+        true_mean, _, true_logvar = self.q_posterior_mean_var(x_0=x_0, x_t=x_t, t=t)  # noqa
         model_mean, _, model_logvar, pred_x_0 = self.p_mean_var(
             denoise_fn, x_t=x_t, t=t, clip_denoised=clip_denoised, return_pred=True)
         kl = normal_kl(true_mean, true_logvar, model_mean, model_logvar)

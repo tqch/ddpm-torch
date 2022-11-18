@@ -4,7 +4,7 @@ the implementation is based on the code of stylegan2-ada-pytorch [^2]
 
 [^1]: Kynkäänniemi, Tuomas, et al. "Improved precision and recall metric for assessing generative models." Advances in Neural Information Processing Systems 32 (2019).
 [^2]: https://github.com/NVlabs/stylegan2-ada-pytorch
-"""
+""" # noqa
 
 
 import os
