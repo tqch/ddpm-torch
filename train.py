@@ -57,7 +57,6 @@ def train(rank=0, args=None, temp_dir=""):
 
     betas = get_beta_schedule(
         d_cfgs.beta_schedule, beta_start=d_cfgs.beta_start, beta_end=d_cfgs.beta_end, timesteps=d_cfgs.timesteps)
-
     diffusion = GaussianDiffusion(betas=betas, **d_cfgs)
 
     # denoise parameters
@@ -78,24 +77,34 @@ def train(rank=0, args=None, temp_dir=""):
         # CUDA devices are required to run with NCCL backend
         assert dist.is_available() and torch.cuda.is_available()
 
-        if args.rigid_run:
-            # shared file-system initialization
+        if args.rigid_launch:
+            # launched by torch.multiprocessing.spawn
+            # share information and initialize the distributed package via shared file-system (FileStore)
             # adapted from https://github.com/NVlabs/stylegan2-ada-pytorch
             # currently, this only supports single-node training
+            assert temp_dir, "Temporary directory cannot be empty!"
             init_method = f"file://{os.path.join(os.path.abspath(temp_dir), '.torch_distributed_init')}"
             dist.init_process_group("nccl", init_method=init_method, rank=rank, world_size=args.num_gpus)
             local_rank = rank
             os.environ["WORLD_SIZE"] = str(args.num_gpus)
             os.environ["LOCAL_RANK"] = str(rank)
         else:
-            # TCP initialization
-            dist.init_process_group("nccl")
-            rank = dist.get_rank()  # global process id across all node(s)
-            local_rank = int(os.environ["LOCAL_RANK"])  # local device id on a single node
-            args.num_gpus = dist.get_world_size()
+            # launched by either torch.distributed.elastic (single-node) or Slurm srun command (multi-node)
+            # elastic launch with C10d rendezvous backend by default uses TCPStore
+            # initialize with environment variables for maximum customizability
+            world_size = int(os.environ.get("WORLD_SIZE", os.environ.get("SLURM_NTASKS", "1")))
+            rank = int(os.environ.get("RANK", os.environ.get("SLURM_PROCID", "0")))
+            dist.init_process_group("nccl", init_method="env://", world_size=world_size, rank=rank)
+            # global process id across all node(s)
+            local_world_size = int(os.environ.get("LOCAL_WORLD_SIZE", "0")) or \
+                               int(os.environ.get("SLURM_GPUS_ON_NODE", "0")) or \
+                               torch.cuda.device_count()
+            # local device id on a single node
+            local_rank = int(os.environ.get("LOCAL_RANK", "0")) or rank % local_world_size
+            args.num_gpus = world_size or local_world_size
+            os.environ["WORLD_SIZE"] = os.environ.get("WORLD_SIZE", str(world_size))
 
         logger(f"Using distributed training with {args.num_gpus} GPU(s).")
-
         torch.cuda.set_device(local_rank)
         _model.cuda()
         model = DDP(_model, device_ids=[local_rank, ])
@@ -175,7 +184,8 @@ def train(rank=0, args=None, temp_dir=""):
         num_save_images=num_save_images,
         ema_decay=args.ema_decay,
         rank=rank,
-        distributed=distributed
+        distributed=distributed,
+        dry_run=args.dry_run
     )
     evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
     # in case of elastic launch, resume should always be turned on
@@ -236,16 +246,27 @@ def main():
     parser.add_argument("--use-ema", action="store_true", help="whether to use exponential moving average")
     parser.add_argument("--ema-decay", default=0.9999, type=float, help="decay factor of ema")
     parser.add_argument("--distributed", action="store_true", help="whether to use distributed training")
-    parser.add_argument("--rigid-run", action="store_true", help="whether not to use elastic launch")
+    parser.add_argument("--rigid-launch", action="store_true", help="whether to use torch multiprocessing spawn")
     parser.add_argument("--num-gpus", default=1, type=int, help="number of gpus for distributed training")
+    parser.add_argument("--dry-run", action="store_true", help="test-run till the first model update completes")
 
     args = parser.parse_args()
 
-    if args.distributed and args.rigid_run:
+    if args.distributed and args.rigid_launch:
         mp.set_start_method("spawn")
         with tempfile.TemporaryDirectory() as temp_dir:
             mp.spawn(train, args=(args, temp_dir), nprocs=args.num_gpus)
     else:
+        """
+        As opposed to the case of rigid launch, distributed training now:
+        (*: elastic launch only; **: Slurm srun only)
+         *1. handles failures by restarting all the workers 
+         *2.1 assigns RANK and WORLD_SIZE automatically
+        **2.2 sets MASTER_ADDR & MASTER_PORT manually beforehand via environment variables
+         *3. allows for number of nodes change
+          4. uses TCP initialization by default
+        **5. supports multi-node training
+        """
         train(args=args)
 
 

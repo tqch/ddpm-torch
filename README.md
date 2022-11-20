@@ -88,7 +88,7 @@ optional arguments:
 				<summary>Expand</summary>
 				<pre><code>
 usage: train.py [-h] [--dataset {mnist,cifar10,celeba,celebahq}] [--root ROOT]
-                [--epochs EPOCHS] [--lr LR] [--beta1 BETA1] [--beta2 BETA2]
+                [--epochs EPOCHS] [--lr LR] [--beta1 BETA1] [--beta2 BETA2]   
                 [--batch-size BATCH_SIZE] [--num-accum NUM_ACCUM]
                 [--block-size BLOCK_SIZE] [--timesteps TIMESTEPS]
                 [--beta-schedule {quad,linear,warmup10,warmup50,jsd}]
@@ -102,13 +102,29 @@ usage: train.py [-h] [--dataset {mnist,cifar10,celeba,celebahq}] [--root ROOT]
                 [--chkpt-dir CHKPT_DIR] [--chkpt-name CHKPT_NAME]
                 [--chkpt-intv CHKPT_INTV] [--seed SEED] [--resume]
                 [--chkpt-path CHKPT_PATH] [--eval] [--use-ema]
-                [--ema-decay EMA_DECAY] [--distributed] [--rigid-run]
-                [--num-gpus NUM_GPUS]
+                [--ema-decay EMA_DECAY] [--distributed] [--rigid-launch]
+                [--num-gpus NUM_GPUS] [--dry-run]
 optional arguments:
   -h, --help            show this help message and exit
   --dataset {mnist,cifar10,celeba,celebahq}
   --root ROOT           root directory of datasets
-  --resume              to resume training from a checkpoint
+  --epochs EPOCHS       total number of training epochs
+  --lr LR               learning rate
+  --beta1 BETA1         beta_1 in Adam
+  --beta2 BETA2         beta_2 in Adam
+  --batch-size BATCH_SIZE
+  --num-accum NUM_ACCUM
+                        number of mini-batches before an update
+  --block-size BLOCK_SIZE
+                        block size used for pixel shuffle
+  --timesteps TIMESTEPS
+                        number of diffusion steps
+  --beta-schedule {quad,linear,warmup10,warmup50,jsd}
+  --beta-start BETA_START
+  --beta-end BETA_END
+  --model-mean-type {mean,x_0,eps}
+  --model-var-type {learned,fixed-small,fixed-large}
+  --loss-type {kl,mse}
   --chkpt-path CHKPT_PATH
                         checkpoint path used to resume training
   --eval                whether to evaluate fid during training
@@ -116,8 +132,9 @@ optional arguments:
   --ema-decay EMA_DECAY
                         decay factor of ema
   --distributed         whether to use distributed training
-  --rigid-run           whether not to use elastic launch
+  --rigid-launch        whether to use torch multiprocessing spawn
   --num-gpus NUM_GPUS   number of gpus for distributed training
+  --dry-run             test-run till the first model update completes
             	</code></pre>
             </details>
 			</td><td>
@@ -190,6 +207,7 @@ optional arguments:
 **Examples**
 
 - Train a 25-Gaussian toy model with single GPU (device id: 0) for a total of 100 epochs
+
     ```shell
     python train_toy.py --dataset gaussian25 --device cuda:0 --epochs 100
     ```
@@ -199,16 +217,18 @@ optional arguments:
     python train.py --dataset cifar10 --train-device cuda:0 --epochs 50
     ```
 
+(*You can always use `dry-run` for testing/tuning purpose.*)
+
 - Train a CelebA model with an effective batch size of 64 x 2 x 4 = 128 on a four-card machine (single node) using shared file-system initialization
     ```shell
-    python train.py --dataset celeba --use-ema --num-accum 2 --num-gpus 4 --distributed --rigid-run
+    python train.py --dataset celeba --use-ema --num-accum 2 --num-gpus 4 --distributed --rigid-launch
     ```
     - `use-ema`: use exponential moving average (0.9999 decay by default)
     - `num-accum 2`: accumulate gradients for 2 mini-batches
     - `num-gpus`: number of GPU(s) to use for training, i.e. `WORLD_SIZE` of the process group
     - `distributed`: enable multi-gpu DDP training
     - `rigid-run`: use shared-file system initialization and `torch.multiprocessing`
-
+    
 - (**Recommended**) Train a CelebA model with an effective batch-size of 64 x 1 x 2 = 128 using only two GPUs with `torchrun` Elastic Launch[^6] (TCP initialization)
     ```shell
     export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv_backend c10d train.py --dataset celeba --distributed

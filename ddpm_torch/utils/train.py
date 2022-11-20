@@ -81,7 +81,8 @@ class Trainer:
             num_save_images=64,
             ema_decay=0.9999,
             distributed=False,
-            rank=0  # process id for distributed training
+            rank=0,  # process id for distributed training
+            dry_run=False
     ):
         self.model = model
         self.optimizer = optimizer
@@ -106,6 +107,7 @@ class Trainer:
             assert sampler is not None
         self.distributed = distributed
         self.rank = rank
+        self.dry_run = dry_run
         self.is_main = rank == 0
         self.world_size = int(os.environ.get("WORLD_SIZE", "1"))
         self.sample_seed = torch.initial_seed() + self.rank  # device-specific seed
@@ -178,10 +180,14 @@ class Trainer:
         else:
             shape, noise = None, None
 
+        if self.dry_run:
+            self.start_epoch, self.epochs = 0, 1
+
         global_steps = 0
         for e in range(self.start_epoch, self.epochs):
             self.stats.reset()
             self.model.train()
+            results = dict()
             if isinstance(self.sampler, DistributedSampler):
                 self.sampler.set_epoch(e)
             with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_main) as t:
@@ -191,14 +197,15 @@ class Trainer:
                     global_steps += 1
                     self.step(x.to(self.device), global_steps=global_steps)
                     t.set_postfix(self.current_stats)
+                    results.update(self.current_stats)
+                    if self.dry_run and not global_steps % self.num_accum:
+                        break
                     if i == len(self.trainloader) - 1:
                         self.model.eval()
                         if evaluator is not None:
                             eval_results = evaluator.eval(self.sample_fn)
                         else:
                             eval_results = dict()
-                        results = dict()
-                        results.update(self.current_stats)
                         results.update(eval_results)
                         t.set_postfix(results)
 
