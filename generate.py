@@ -1,37 +1,25 @@
-if __name__ == "__main__":
-    import os
-    import json
-    import math
-    import uuid
-    import torch
-    from tqdm import trange
-    from PIL import Image
-    from concurrent.futures import ThreadPoolExecutor
-    from ddpm_torch import *
-    from ddim import DDIM, get_selection_schedule
-    from argparse import ArgumentParser
+import os
+import json
+import math
+import uuid
+import time
+import torch
+from tqdm import tqdm
+from PIL import Image
+from concurrent.futures import ThreadPoolExecutor
+from ddpm_torch import *
+from ddim import DDIM, get_selection_schedule
+from argparse import ArgumentParser
+import torch.multiprocessing as mp
+from multiprocessing.sharedctypes import Synchronized
 
-    parser = ArgumentParser()
-    parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba"], default="cifar10")
-    parser.add_argument("--batch-size", default=128, type=int)
-    parser.add_argument("--total-size", default=50000, type=int)
-    parser.add_argument("--config-dir", default="./configs", type=str)
-    parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
-    parser.add_argument("--chkpt-path", default="", type=str)
-    parser.add_argument("--save-dir", default="./images/eval", type=str)
-    parser.add_argument("--device", default="cuda:0", type=str)
-    parser.add_argument("--use-ema", action="store_true")
-    parser.add_argument("--use-ddim", action="store_true")
-    parser.add_argument("--eta", default=0., type=float)
-    parser.add_argument("--skip-schedule", default="linear", type=str)
-    parser.add_argument("--subseq-size", default=10, type=int)
-    parser.add_argument("--suffix", default="", type=str)
 
-    args = parser.parse_args()
-
+def generate(rank, args, counter=0):
+    is_main = rank == 0
     dataset = args.dataset
     in_channels = DATA_INFO[dataset]["channels"]
     image_res = DATA_INFO[dataset]["resolution"][0]
+    input_shape = (in_channels, image_res, image_res)
 
     config_dir = args.config_dir
     with open(os.path.join(config_dir, dataset + ".json")) as f:
@@ -55,7 +43,7 @@ if __name__ == "__main__":
     else:
         diffusion = GaussianDiffusion(betas, **diffusion_kwargs)
 
-    device = torch.device(args.device)
+    device = torch.device(f"cuda:{rank}" if args.num_gpus > 1 else args.device)
     model = UNet(out_channels=in_channels, **configs["denoise"])
     model.to(device)
     chkpt_dir = args.chkpt_dir
@@ -70,6 +58,7 @@ if __name__ == "__main__":
         if k.startswith("module."):  # state_dict of DDP
             state_dict[k.split(".", maxsplit=1)[1]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
+    del state_dict
     model.eval()
     for p in model.parameters():
         if p.requires_grad:
@@ -77,13 +66,22 @@ if __name__ == "__main__":
 
     folder_name = folder_name + args.suffix
     save_dir = os.path.join(args.save_dir, folder_name)
-    if not os.path.exists(save_dir):
+    if is_main and not os.path.exists(save_dir):
         os.makedirs(save_dir)
+    world_size = args.num_gpus or 1
+    total_size = args.total_size // world_size
     batch_size = args.batch_size
-    total_size = args.total_size
-    num_eval_batches = math.ceil(total_size / batch_size)
-    shape = (batch_size, 3, image_res, image_res)
-
+    if world_size > 1:
+        remainder = args.total_size % world_size
+        num_eval_batches = math.ceil((total_size + 1) / batch_size) * remainder
+        num_eval_batches += math.ceil(total_size / batch_size) * (world_size - remainder)
+        if rank < args.total_size % args.num_gpus:
+            total_size += 1
+        num_local_eval_batches = math.ceil(total_size / batch_size)
+    else:
+        num_eval_batches = num_local_eval_batches = math.ceil(total_size / batch_size)
+    max_count = num_eval_batches
+    shape = (batch_size, ) + input_shape
 
     def save_image(arr):
         with Image.fromarray(arr, mode="RGB") as im:
@@ -92,12 +90,70 @@ if __name__ == "__main__":
     if torch.backends.cudnn.is_available():  # noqa
         torch.backends.cudnn.benchmark = True  # noqa
 
-    with ThreadPoolExecutor(max_workers=os.cpu_count()) as pool:
-        for i in trange(num_eval_batches):
-            if i == num_eval_batches - 1:
+    class DummyProgressBar:
+        def update(self, n):
+            pass
+
+    pbar = tqdm(total=max_count) if is_main else DummyProgressBar()
+    local_counter = 0
+
+    with ThreadPoolExecutor(max_workers=args.max_workers) as pool:
+        for i in range(num_local_eval_batches):
+            if i == num_local_eval_batches - 1:
                 shape = (total_size - i * batch_size, 3, image_res, image_res)
-                x = diffusion.p_sample(model, shape=shape, device=device, noise=torch.randn(shape, device=device)).cpu()
-            else:
-                x = diffusion.p_sample(model, shape=shape, device=device, noise=torch.randn(shape, device=device)).cpu()
+            x = diffusion.p_sample(model, shape=shape, device=device, noise=torch.randn(shape, device=device)).cpu()
             x = (x * 127.5 + 127.5).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).numpy()
             pool.map(save_image, list(x))
+            if isinstance(counter, Synchronized):
+                with counter.get_lock():
+                    counter.value += 1
+                    if counter.value > local_counter:
+                        pbar.update(counter.value - local_counter)
+                        local_counter = counter.value
+            else:
+                pbar.update(1)
+
+    if is_main and isinstance(counter, Synchronized):
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()  # release unused cached memory
+        while local_counter < max_count:
+            time.sleep(0.1)
+            with counter.get_lock():
+                if counter.value > local_counter:
+                    pbar.update(counter.value - local_counter)
+                    local_counter = counter.value
+
+
+def main():
+    parser = ArgumentParser()
+    parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba"], default="cifar10")
+    parser.add_argument("--batch-size", default=128, type=int)
+    parser.add_argument("--total-size", default=50000, type=int)
+    parser.add_argument("--config-dir", default="./configs", type=str)
+    parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
+    parser.add_argument("--chkpt-path", default="", type=str)
+    parser.add_argument("--save-dir", default="./images/eval", type=str)
+    parser.add_argument("--device", default="cuda:0", type=str)
+    parser.add_argument("--use-ema", action="store_true")
+    parser.add_argument("--use-ddim", action="store_true")
+    parser.add_argument("--eta", default=0., type=float)
+    parser.add_argument("--skip-schedule", default="linear", type=str)
+    parser.add_argument("--subseq-size", default=10, type=int)
+    parser.add_argument("--suffix", default="", type=str)
+    parser.add_argument("--max-workers", default=8, type=int)
+    parser.add_argument("--num-gpus", default=1, type=int)
+
+    args = parser.parse_args()
+
+    world_size = args.num_gpus
+    if world_size > 1:
+        mp.set_start_method("spawn")
+        counter = mp.Value("i", 0)
+        mp.spawn(generate, args=(args, counter), nprocs=world_size)
+    else:
+        generate(0, args)
+
+
+if __name__ == "__main__":
+    main()

@@ -114,13 +114,13 @@ def train(rank=0, args=None, temp_dir=""):
         rank = local_rank = 0  # main process by default
         model = _model.to(train_device)
 
-    is_main = rank == 0
+    is_main = rank == 0  # not necessarily the main process per se
 
     logger(f"Dataset: {dataset}")
     logger(f"Effective batch-size is {t_cfgs.batch_size} * {args.num_accum} = {t_cfgs.batch_size * args.num_accum}.")
 
     optimizer = Adam(model.parameters(), lr=t_cfgs.lr, betas=(t_cfgs.beta1, t_cfgs.beta2))
-    # Note1: lr_lambda is used to calculate the **multiplicative factor**
+    # Note1: lr_lambda is used to calculate the multiplicative factor
     # Note2: index starts at 0
     scheduler = lr_scheduler.LambdaLR(
         optimizer, lr_lambda=lambda t: min((t + 1) / t_cfgs.warmup, 1.0)) if t_cfgs.warmup > 0 else None
@@ -188,7 +188,7 @@ def train(rank=0, args=None, temp_dir=""):
         dry_run=args.dry_run
     )
     evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
-    # in case of elastic launch, resume should always be turned on
+    # in the case of distributed training, resume should always be turned on
     resume = args.resume or distributed
     if resume:
         try:

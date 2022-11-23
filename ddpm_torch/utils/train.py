@@ -145,7 +145,7 @@ class Trainer:
             nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
             self.optimizer.step()
             self.optimizer.zero_grad(set_to_none=True)
-            # adjust learning rate every step (warming up)
+            # adjust learning rate every step (e.g. warming up)
             self.scheduler.step()
             if self.use_ema and hasattr(self.ema, "update"):
                 self.ema.update()
@@ -173,8 +173,7 @@ class Trainer:
         if num_samples:
             assert num_samples % self.world_size == 0, "Number of samples should be divisible by WORLD_SIZE!"
             shape = (num_samples // self.world_size, ) + self.shape
-            # fixed x_T for image generation
-            # not of much importance since the entire reverse process is stochastic
+            # fix random number generator for sampling
             rng = torch.Generator().manual_seed(self.sample_seed)
             noise = torch.empty(shape).normal_(generator=rng)
         else:

@@ -147,7 +147,8 @@ usage: generate.py [-h] [--dataset {mnist,cifar10,celeba}]
                    [--chkpt-path CHKPT_PATH] [--save-dir SAVE_DIR]
                    [--device DEVICE] [--use-ema] [--use-ddim] [--eta ETA]
                    [--skip-schedule SKIP_SCHEDULE] [--subseq-size SUBSEQ_SIZE]
-                   [--suffix SUFFIX]
+                   [--suffix SUFFIX] [--max-workers MAX_WORKERS]
+                   [--num-gpus NUM_GPUS]
 optional arguments:
   -h, --help            show this help message and exit
   --dataset {mnist,cifar10,celeba}
@@ -164,6 +165,8 @@ optional arguments:
   --skip-schedule SKIP_SCHEDULE
   --subseq-size SUBSEQ_SIZE
   --suffix SUFFIX
+  --max-workers MAX_WORKERS
+  --num-gpus NUM_GPUS
 			</pre></code>
 			</details>
 			</td><td>
@@ -234,16 +237,17 @@ optional arguments:
     export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv_backend c10d train.py --dataset celeba --distributed
     ```
 
-- Generate 50,000 samples (128 per mini-batch) of the EMA checkpoint located at `./chkpts/train/ddpm_cifar10_2160.pt` using DDIM sampler and save the results to `./images/eval/cifar10_2160`
+- Generate 50,000 samples (128 per mini-batch) of the EMA checkpoint located at `./chkpts/train/ddpm_cifar10_2160.pt` in parallel using 4 GPUs and DDIM sampler. The results are stored in `./images/eval/cifar10_2160`
 	```shell
-	python generate.py --dataset cifar10 --chkpt-path ./chkpt/train/ddpm_cifar10_2160.pt --use-ema --use-ddim --skip-schedule quadratic --subseq-size 100 --suffix _2160
+	python generate.py --dataset cifar10 --chkpt-path ./chkpt/train/ddpm_cifar10_2160.pt --use-ema --use-ddim --skip-schedule quadratic --subseq-size 100 --suffix _2160 --num-gpus 4
 	```
     - `use-ddim`: use DDIM
     - `skip-schedule quadratic`: use the quadratic schedule
     - `subseq-size`: length of sub-sequence, i.e. DDIM timesteps
     - `suffix`: suffix string to the dataset name in the folder name
+    - `num-gpus`: number of GPU(s) to use for generation
 
-- Evaluate FID, Precision/Recall of generated samples under `./images/eval/cifar10_2160`
+- Evaluate FID, Precision/Recall of generated samples in `./images/eval/cifar10_2160`
 	```shell
 	python eval.py --dataset cifar10 --folder-name cifar10_2160
 	```
