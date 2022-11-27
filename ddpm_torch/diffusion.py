@@ -175,11 +175,14 @@ class GaussianDiffusion:
 
     @torch.inference_mode()
     def p_sample_progressive(
-            self, denoise_fn, shape, device=torch.device("cpu"), noise=None, pred_freq=50):
+            self, denoise_fn, shape, device=torch.device("cpu"), noise=None, pred_freq=10, seed=None):
         B = (shape or noise.shape)[0]
         t = torch.empty(B, dtype=torch.int64, device=device)
+        rng = None
+        if seed is not None:
+            rng = torch.Generator(device).manual_seed(seed)
         if noise is None:
-            x_t = torch.randn(shape, device=device)
+            x_t = torch.empty(shape, device=device).normal_(generator=rng)
         else:
             x_t = noise.to(device)
         L = self.timesteps // pred_freq
@@ -187,7 +190,8 @@ class GaussianDiffusion:
         idx = L
         for ti in range(self.timesteps - 1, -1, -1):
             t.fill_(ti)
-            x_t, pred = self.p_sample_step(denoise_fn, x_t, t, return_pred=True)
+            x_t, pred = self.p_sample_step(
+                denoise_fn, x_t, t, return_pred=True, generator=rng)
             if (ti + 1) % pred_freq == 0:
                 idx -= 1
                 preds[idx] = pred.cpu()

@@ -44,7 +44,12 @@ def generate(rank, args, counter=0):
         diffusion = GaussianDiffusion(betas, **diffusion_kwargs)
 
     device = torch.device(f"cuda:{rank}" if args.num_gpus > 1 else args.device)
+    block_size = configs["denoise"].pop("block_size", 1)
     model = UNet(out_channels=in_channels, **configs["denoise"])
+    if block_size > 1:
+        pre_transform = torch.nn.PixelUnshuffle(block_size)  # space-to-depth
+        post_transform = torch.nn.PixelShuffle(block_size)  # depth-to-space
+        model = ModelWrapper(model, pre_transform, post_transform)
     model.to(device)
     chkpt_dir = args.chkpt_dir
     chkpt_path = args.chkpt_path or os.path.join(chkpt_dir, f"ddpm_{dataset}.pt")
@@ -127,7 +132,7 @@ def generate(rank, args, counter=0):
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba"], default="cifar10")
+    parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba", "celebahq"], default="cifar10")
     parser.add_argument("--batch-size", default=128, type=int)
     parser.add_argument("--total-size", default=50000, type=int)
     parser.add_argument("--config-dir", default="./configs", type=str)

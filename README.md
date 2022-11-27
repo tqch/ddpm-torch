@@ -141,7 +141,7 @@ optional arguments:
 			<details>
 			<summary>Expand</summary>
 			<pre><code>
-usage: generate.py [-h] [--dataset {mnist,cifar10,celeba}]
+usage: generate.py [-h] [--dataset {mnist,cifar10,celeba,celebahq}]
                    [--batch-size BATCH_SIZE] [--total-size TOTAL_SIZE]
                    [--config-dir CONFIG_DIR] [--chkpt-dir CHKPT_DIR]
                    [--chkpt-path CHKPT_PATH] [--save-dir SAVE_DIR]
@@ -151,7 +151,7 @@ usage: generate.py [-h] [--dataset {mnist,cifar10,celeba}]
                    [--num-gpus NUM_GPUS]
 optional arguments:
   -h, --help            show this help message and exit
-  --dataset {mnist,cifar10,celeba}
+  --dataset {mnist,cifar10,celeba,celebahq}
   --batch-size BATCH_SIZE
   --total-size TOTAL_SIZE
   --config-dir CONFIG_DIR
@@ -173,7 +173,7 @@ optional arguments:
 			<details>
 			<summary>Expand</summary>
 			<pre><code>
-usage: eval.py [-h] [--root ROOT] [--dataset {mnist,cifar10,celeba}]
+usage: eval.py [-h] [--root ROOT] [--dataset {mnist,cifar10,celeba,celebahq}]
                [--model-device MODEL_DEVICE] [--eval-device EVAL_DEVICE]
                [--eval-batch-size EVAL_BATCH_SIZE]
                [--eval-total-size EVAL_TOTAL_SIZE] [--num-workers NUM_WORKERS]
@@ -185,7 +185,7 @@ usage: eval.py [-h] [--root ROOT] [--dataset {mnist,cifar10,celeba}]
 optional arguments:
   -h, --help            show this help message and exit
   --root ROOT
-  --dataset {mnist,cifar10,celeba}
+  --dataset {mnist,cifar10,celeba,celebahq}
   --model-device MODEL_DEVICE
   --eval-device EVAL_DEVICE
   --eval-batch-size EVAL_BATCH_SIZE
@@ -396,8 +396,9 @@ optional arguments:
 	<table width="100%">
             <tr>
                 <th width="10%">Dataset</th>
-                <th width="45%" align="center">CIFAR-10</td>
-                <th width="45%" align="center">CelebA</td>
+                <th width="30%" align="center">CIFAR-10</td>
+                <th width="30%" align="center">CelebA</td>
+                <th width="30%" align="center">CelebA-HQ</td>
             </tr><tr>
                 <td><b>Generated images</b></td>
                 <td><a href="./assets/cifar10_gen.png">
@@ -406,29 +407,12 @@ optional arguments:
                 <td><a href="./assets/celeba_gen.png" >
                 <img alt="celeba_gen_thumbnail" src="./assets/thumbnails/celeba_gen.png" height="100%" width="100%">
                 </a></td>
+                <td><a href="./assets/celebahq_gen.png" >
+                <img alt="celebahq_gen_thumbnail" src="./assets/thumbnails/celebahq_gen.png" height="100%" width="100%">
+                </a></td>
             </tr>
-	</table>
+    </table>
 </p>
-<details>
-	<summary>Training process (animated)</summary>
-    <p align="center">
-        <table width="100%">
-            <tr>
-                <th width="10%">Dataset</th>
-                <th width="45%" align="center">CIFAR-10</td>
-                <th width="45%" align="center">CelebA</td>
-            </tr><tr>
-                <td><b>Generated images</b></td>
-                <td><a href="./assets/cifar10_train.webp" >
-                <img alt="cifar10_train" src="./assets/cifar10_train.webp" height="100%" width="100%">
-                </a></td>
-                <td><a href="./assets/celeba_train.webp" >
-                <img alt="celeba_train_thumbnail" src="./assets/thumbnails/celeba_train.webp" height="100%" width="100%">
-                </a></td>
-            </tr>
-        </table>
-    </p>
-</details>
 
 <details>
 	<summary>Denoising process (animated)</summary>
@@ -436,18 +420,23 @@ optional arguments:
         <table width="100%">
         	<tr>
                 <th width="10%">Dataset</th>
-                <th width="45%" align="center">CIFAR-10</td>
-                <th width="45%" align="center">CelebA</td>
+                <th width="30%" align="center">CIFAR-10</td>
+                <th width="30%" align="center">CelebA</td>
+                <th width="30%" align="center">CelebA-HQ</td>
             </tr><tr>
                 <td><b>Generated images</b></td>
                 <td>
                 <a href="./assets/cifar10_denoise.webp">
                 <img alt="cifar10_denoise" src="./assets/cifar10_denoise.webp" height="100%" width="100%">
                 </a></td>
-                <td><a href="./assets/celeba_denoise.webp" >
+                <td><a href="./assets/celeba_denoise.webp">
                 <img alt="celeba_denoise_thumbnail" src="./assets/thumbnails/celeba_denoise.webp" height="100%" width="100%">
                 </a></td>
-            </tr>
+                <td>
+                <a href="./assets/celebahq_denoise.webp">
+                <img alt="celebahq_denoise_thumbnail" src="./assets/thumbnails/celebahq_denoise.webp" height="100%" width="100%">
+                </a></td>
+			</tr>
         </table>
     </p>
 </details>
