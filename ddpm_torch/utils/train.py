@@ -108,7 +108,7 @@ class Trainer:
         self.distributed = distributed
         self.rank = rank
         self.dry_run = dry_run
-        self.is_main = rank == 0
+        self.is_leader = rank == 0
         self.world_size = int(os.environ.get("WORLD_SIZE", "1"))
         self.sample_seed = torch.initial_seed() + self.rank  # device-specific seed
 
@@ -189,9 +189,9 @@ class Trainer:
             results = dict()
             if isinstance(self.sampler, DistributedSampler):
                 self.sampler.set_epoch(e)
-            with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_main) as t:
+            with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_leader) as t:
                 for i, x in enumerate(t):
-                    if isinstance(x, tuple):
+                    if isinstance(x, (list, tuple)):
                         x = x[0]  # exclude labels; unconditional model
                     global_steps += 1
                     self.step(x.to(self.device), global_steps=global_steps)
@@ -209,6 +209,7 @@ class Trainer:
                         t.set_postfix(results)
 
             if not (e + 1) % self.image_intv and num_samples and image_dir:
+                self.model.eval()
                 x = self.sample_fn(noise)
                 if self.distributed:
                     # balance GPU memory usages within the same process group
@@ -216,9 +217,9 @@ class Trainer:
                     dist.all_gather(x_list, x)
                     x = torch.cat(x_list, dim=0)
                 x = x.cpu()
-                if self.is_main:
+                if self.is_leader:
                     save_image(x.cpu(), os.path.join(image_dir, f"{e + 1}.jpg"), nrow=nrow)
-            if not (e + 1) % self.chkpt_intv and chkpt_path and self.is_main:
+            if not (e + 1) % self.chkpt_intv and chkpt_path and self.is_leader:
                 self.save_checkpoint(chkpt_path, epoch=e+1, **results)
             if self.distributed:
                 dist.barrier()  # synchronize all processes here

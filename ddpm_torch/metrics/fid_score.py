@@ -1,7 +1,7 @@
 """
 This script is modified from the original PyTorch Implementation of FID
-(https://github.com/mseitzer/pytorch-fid/) to support fid evaulation on
-the fly during the training process without writing data onto the disk.
+(https://github.com/mseitzer/pytorch-fid/) to support fid evaluation on
+the fly without writing data onto the disk during the training process.
 """
 
 """Calculates the Frechet Inception Distance (FID) to evalulate GANs

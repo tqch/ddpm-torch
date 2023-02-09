@@ -105,9 +105,10 @@ if __name__ == "__main__":
             dataset_kwargs = {
                 "celeba": {"split": "all"},
             }.get(dataset, {"train": True})
-            transform = DATA_INFO[dataset]["_transform"]
+            transform = DATASET_DICT[dataset].__dict__.get(
+                "_transform", DATASET_DICT[dataset].__dict__.get("transform", None))
             manifold_builder = _ManifoldBuilder(
-                data=DATA_INFO[dataset]["data"](root=root, transform=transform, **dataset_kwargs))
+                data=DATASET_DICT[dataset](root=root, transform=transform, **dataset_kwargs))
             manifold_builder.save(manifold_path)
             true_manifold = deepcopy(manifold_builder.manifold)
             del manifold_builder

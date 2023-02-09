@@ -7,21 +7,33 @@ import matplotlib.pyplot as plt
 mpl.rcParams["figure.dpi"] = 144
 
 
-def dict2str(d):
+def dict2str(d, level=0, compact=True):
     out_str = []
-    for k, v in d.items():
-        out_str.append(str(k))
-        if isinstance(v, (list, tuple)):
-            v = "_".join(list(map(str, v)))
+    if compact:
+        indents, newline, colon, comma = "." * level, "", "(", ")+"
+        brackets = "", ""
+    else:
+        indents, newline, colon, comma = "  " * level, "\n", ": ", ","
+        brackets = "{", "}"
+    for i, (k, v) in enumerate(d.items()):
+        line = indents + str(k) + colon
+        if isinstance(v, str):
+            line += v
         elif isinstance(v, float):
-            v = f"{v:.2e}"
+            line += f"{v:.3e}"
         elif isinstance(v, dict):
-            v = dict2str(v)
+            line += brackets[0] + newline + dict2str(v, level + 1, compact=compact)
+            line += indents + brackets[1]
         else:
-            v = str(v)
-        out_str.append(v)
-    out_str = "_".join(out_str)
-    return out_str
+            if compact and isinstance(v, (list, tuple)):
+                line += "_".join(list(map(str, v)))
+            else:
+                line += str(v)
+        if i != len(d) - 1:
+            line += comma
+        line += newline
+        out_str.append(line)
+    return "".join(out_str)
 
 
 def seed_all(seed):
@@ -81,7 +93,7 @@ def split_squeeze(data):
     return x, y
 
 
-class Configs(dict):
+class ConfigDict(dict):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

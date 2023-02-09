@@ -93,7 +93,7 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         B, *_ = shape
         subsequence = self.subsequence.to(device)
         _denoise_fn = lambda x, t: denoise_fn(x, subsequence.gather(0, t))
-        t = torch.empty((B,), dtype=torch.int64, device=device)
+        t = torch.empty((B, ), dtype=torch.int64, device=device)
         if noise is None:
             x_t = torch.randn(shape, device=device)
         else:

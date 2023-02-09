@@ -13,7 +13,6 @@ from torch.distributed.elastic.multiprocessing import errors
 
 
 def train(rank=0, args=None, temp_dir=""):
-
     distributed = args.distributed
 
     def logger(msg, **kwargs):
@@ -23,8 +22,8 @@ def train(rank=0, args=None, temp_dir=""):
     root = os.path.expanduser(args.root)
     dataset = args.dataset
 
-    in_channels = DATA_INFO[dataset]["channels"]
-    image_res = DATA_INFO[dataset]["resolution"]
+    in_channels = DATASET_INFO[dataset]["channels"]
+    image_res = DATASET_INFO[dataset]["resolution"]
     image_shape = (in_channels, ) + image_res
 
     # set seed for all rngs
@@ -37,15 +36,19 @@ def train(rank=0, args=None, temp_dir=""):
 
     # train parameters
     gettr = partial(get_param, configs_1=configs.get("train", {}), configs_2=args)
-    t_cfgs = Configs(**{k: gettr(k) for k in ("batch_size", "beta1", "beta2", "lr", "epochs", "grad_norm", "warmup")})
-    t_cfgs.batch_size //= args.num_accum
+    train_configs = ConfigDict(**{
+        k: gettr(k)
+        for k in ("batch_size", "beta1", "beta2", "lr", "epochs", "grad_norm", "warmup")
+    })
+    train_configs.batch_size //= args.num_accum
     train_device = torch.device(args.train_device)
     eval_device = torch.device(args.eval_device)
 
     # diffusion parameters
     getdif = partial(get_param, configs_1=configs.get("diffusion", {}), configs_2=args)
-    d_cfgs = Configs(**{
-        k: getdif(k) for k in (
+    diffusion_configs = ConfigDict(**{
+        k: getdif(k)
+        for k in (
             "beta_schedule",
             "beta_start",
             "beta_end",
@@ -56,16 +59,17 @@ def train(rank=0, args=None, temp_dir=""):
         )})
 
     betas = get_beta_schedule(
-        d_cfgs.beta_schedule, beta_start=d_cfgs.beta_start, beta_end=d_cfgs.beta_end, timesteps=d_cfgs.timesteps)
-    diffusion = GaussianDiffusion(betas=betas, **d_cfgs)
+        diffusion_configs.beta_schedule, beta_start=diffusion_configs.beta_start,
+        beta_end=diffusion_configs.beta_end, timesteps=diffusion_configs.timesteps)
+    diffusion = GaussianDiffusion(betas=betas, **diffusion_configs)
 
     # denoise parameters
-    out_channels = 2 * in_channels if d_cfgs.model_var_type == "learned" else in_channels
-    m_cfgs = configs["denoise"]
-    block_size = m_cfgs.pop("block_size", args.block_size)
-    m_cfgs["in_channels"] = in_channels * block_size ** 2
-    m_cfgs["out_channels"] = out_channels * block_size ** 2
-    _model = UNet(**m_cfgs)
+    out_channels = 2 * in_channels if diffusion_configs.model_var_type == "learned" else in_channels
+    model_configs = configs["denoise"]
+    block_size = model_configs.pop("block_size", args.block_size)
+    model_configs["in_channels"] = in_channels * block_size ** 2
+    model_configs["out_channels"] = out_channels * block_size ** 2
+    _model = UNet(**model_configs)
 
     if block_size > 1:
         pre_transform = torch.nn.PixelUnshuffle(block_size)  # space-to-depth
@@ -111,24 +115,27 @@ def train(rank=0, args=None, temp_dir=""):
         train_device = torch.device(f"cuda:{local_rank}")
 
     else:
-        rank = local_rank = 0  # main process by default
+        rank = local_rank = 0
         model = _model.to(train_device)
 
-    is_main = rank == 0  # not necessarily the main process per se
+    is_leader = rank == 0  # rank 0: leader in the process group
 
     logger(f"Dataset: {dataset}")
-    logger(f"Effective batch-size is {t_cfgs.batch_size} * {args.num_accum} = {t_cfgs.batch_size * args.num_accum}.")
+    logger(
+        f"Effective batch-size is {train_configs.batch_size} * {args.num_accum}"
+        f"= {train_configs.batch_size * args.num_accum}.")
 
-    optimizer = Adam(model.parameters(), lr=t_cfgs.lr, betas=(t_cfgs.beta1, t_cfgs.beta2))
+    optimizer = Adam(model.parameters(), lr=train_configs.lr, betas=(train_configs.beta1, train_configs.beta2))
     # Note1: lr_lambda is used to calculate the multiplicative factor
     # Note2: index starts at 0
     scheduler = lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=lambda t: min((t + 1) / t_cfgs.warmup, 1.0)) if t_cfgs.warmup > 0 else None
+        optimizer, lr_lambda=lambda t: min((t + 1) / train_configs.warmup, 1.0)
+    ) if train_configs.warmup > 0 else None
 
     split = "all" if dataset == "celeba" else "train"
     num_workers = args.num_workers
     trainloader, sampler = get_dataloader(
-        dataset, batch_size=t_cfgs.batch_size, split=split, val_size=0., random_seed=seed,
+        dataset, batch_size=train_configs.batch_size, split=split, val_size=0., random_seed=seed,
         root=root, drop_last=True, pin_memory=True, num_workers=num_workers, distributed=distributed
     )  # drop_last to have a static input shape; num_workers > 0 to enable asynchronous data loading
 
@@ -144,17 +151,17 @@ def train(rank=0, args=None, temp_dir=""):
     logger(f"Generated images (x{num_save_images}) will be saved to {os.path.abspath(image_dir)}", end=" ")
     logger(f"every {image_intv} epoch(s)")
 
-    if is_main:
-        m_cfgs["block_size"] = block_size
+    if is_leader:
+        model_configs["block_size"] = block_size
         hps = {
             "dataset": dataset,
             "seed": seed,
             "use_ema": args.use_ema,
             "ema_decay": args.ema_decay,
             "num_accum": args.num_accum,
-            "train": t_cfgs,
-            "denoise": m_cfgs,
-            "diffusion": d_cfgs
+            "train": train_configs,
+            "denoise": model_configs,
+            "diffusion": diffusion_configs
         }
         timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S%f")
 
@@ -170,13 +177,13 @@ def train(rank=0, args=None, temp_dir=""):
         model=model,
         optimizer=optimizer,
         diffusion=diffusion,
-        epochs=t_cfgs.epochs,
+        epochs=train_configs.epochs,
         trainloader=trainloader,
         sampler=sampler,
         scheduler=scheduler,
         num_accum=args.num_accum,
         use_ema=args.use_ema,
-        grad_norm=t_cfgs.grad_norm,
+        grad_norm=train_configs.grad_norm,
         shape=image_shape,
         device=train_device,
         chkpt_intv=chkpt_intv,

@@ -14,11 +14,21 @@ import torch.multiprocessing as mp
 from multiprocessing.sharedctypes import Synchronized
 
 
+def progress_monitor(total, counter):
+    pbar = tqdm(total=total)
+    while pbar.n < total:
+        if pbar.n < counter.value:  # non-blocking intended
+            pbar.update(counter.value - pbar.n)
+        time.sleep(0.1)
+
+
 def generate(rank, args, counter=0):
-    is_main = rank == 0
+    assert isinstance(counter, (Synchronized, int))
+
+    is_leader = rank == 0
     dataset = args.dataset
-    in_channels = DATA_INFO[dataset]["channels"]
-    image_res = DATA_INFO[dataset]["resolution"][0]
+    in_channels = DATASET_INFO[dataset]["channels"]
+    image_res = DATASET_INFO[dataset]["resolution"][0]
     input_shape = (in_channels, image_res, image_res)
 
     config_dir = args.config_dir
@@ -71,21 +81,15 @@ def generate(rank, args, counter=0):
 
     folder_name = folder_name + args.suffix
     save_dir = os.path.join(args.save_dir, folder_name)
-    if is_main and not os.path.exists(save_dir):
+    if is_leader and not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    world_size = args.num_gpus or 1
-    total_size = args.total_size // world_size
+
+    local_total_size = args.local_total_size
     batch_size = args.batch_size
-    if world_size > 1:
-        remainder = args.total_size % world_size
-        num_eval_batches = math.ceil((total_size + 1) / batch_size) * remainder
-        num_eval_batches += math.ceil(total_size / batch_size) * (world_size - remainder)
-        if rank < args.total_size % args.num_gpus:
-            total_size += 1
-        num_local_eval_batches = math.ceil(total_size / batch_size)
-    else:
-        num_eval_batches = num_local_eval_batches = math.ceil(total_size / batch_size)
-    max_count = num_eval_batches
+    if args.world_size > 1:
+        if rank < args.total_size % args.world_size:
+            local_total_size += 1
+    local_num_batches = math.ceil(local_total_size / batch_size)
     shape = (batch_size, ) + input_shape
 
     def save_image(arr):
@@ -95,39 +99,22 @@ def generate(rank, args, counter=0):
     if torch.backends.cudnn.is_available():  # noqa
         torch.backends.cudnn.benchmark = True  # noqa
 
-    class DummyProgressBar:
-        def update(self, n):
-            pass
-
-    pbar = tqdm(total=max_count) if is_main else DummyProgressBar()
-    local_counter = 0
+    pbar = None
+    if isinstance(counter, int):
+        pbar = tqdm(total=local_num_batches)
 
     with ThreadPoolExecutor(max_workers=args.max_workers) as pool:
-        for i in range(num_local_eval_batches):
-            if i == num_local_eval_batches - 1:
-                shape = (total_size - i * batch_size, 3, image_res, image_res)
+        for i in range(local_num_batches):
+            if i == local_num_batches - 1:
+                shape = (local_total_size - i * batch_size, 3, image_res, image_res)
             x = diffusion.p_sample(model, shape=shape, device=device, noise=torch.randn(shape, device=device)).cpu()
-            x = (x * 127.5 + 127.5).clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).numpy()
+            x = (x * 127.5 + 127.5).round().clamp(0, 255).to(torch.uint8).permute(0, 2, 3, 1).numpy()
             pool.map(save_image, list(x))
             if isinstance(counter, Synchronized):
                 with counter.get_lock():
                     counter.value += 1
-                    if counter.value > local_counter:
-                        pbar.update(counter.value - local_counter)
-                        local_counter = counter.value
             else:
                 pbar.update(1)
-
-    if is_main and isinstance(counter, Synchronized):
-        del model
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()  # release unused cached memory
-        while local_counter < max_count:
-            time.sleep(0.1)
-            with counter.get_lock():
-                if counter.value > local_counter:
-                    pbar.update(counter.value - local_counter)
-                    local_counter = counter.value
 
 
 def main():
@@ -151,10 +138,18 @@ def main():
 
     args = parser.parse_args()
 
-    world_size = args.num_gpus
+    world_size = args.world_size = args.num_gpus or 1
+    local_total_size = args.local_total_size = args.total_size // world_size
+    batch_size = args.batch_size
+    remainder = args.total_size % world_size
+    num_batches = math.ceil((local_total_size + 1) / batch_size) * remainder
+    num_batches += math.ceil(local_total_size / batch_size) * (world_size - remainder)
+    args.num_batches = num_batches
+
     if world_size > 1:
         mp.set_start_method("spawn")
         counter = mp.Value("i", 0)
+        mp.Process(target=progress_monitor, args=(num_batches, counter), daemon=True).start()
         mp.spawn(generate, args=(args, counter), nprocs=world_size)
     else:
         generate(0, args)

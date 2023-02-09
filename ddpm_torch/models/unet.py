@@ -69,7 +69,7 @@ class ResidualBlock(nn.Module):
             in_channels,
             out_channels,
             embed_dim,
-            drop_rate=0.5
+            drop_rate=0.
     ):
         super(ResidualBlock, self).__init__()
         self.norm1 = self.normalize(in_channels)

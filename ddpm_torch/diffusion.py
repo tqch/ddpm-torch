@@ -50,7 +50,7 @@ class GaussianDiffusion:
 
         alphas = 1 - betas
         self.alphas_bar = torch.cumprod(alphas, dim=0)
-        alphas_bar_prev = torch.cat([torch.ones(1, dtype=torch.float64), self.alphas_bar[:-1]])
+        alphas_bar_prev = torch.cat([torch.as_tensor([1., ], dtype=torch.float64), self.alphas_bar[:-1]])
 
         # q(x_t | x_0)
         self.sqrt_alphas_bar = torch.sqrt(self.alphas_bar)
