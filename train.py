@@ -4,6 +4,7 @@ import torch
 import tempfile
 from datetime import datetime
 from functools import partial
+from ddim import *
 from ddpm_torch import *
 from torch.optim import Adam, lr_scheduler
 import torch.distributed as dist
@@ -139,6 +140,11 @@ def train(rank=0, args=None, temp_dir=""):
         root=root, drop_last=True, pin_memory=True, num_workers=num_workers, distributed=distributed
     )  # drop_last to have a static input shape; num_workers > 0 to enable asynchronous data loading
 
+    if args.dry_run:
+        logger("This is a dry run.")
+        args.chkpt_intv = 1
+        args.image_intv = 1
+
     chkpt_dir = args.chkpt_dir
     chkpt_path = os.path.join(chkpt_dir, args.chkpt_name or f"ddpm_{dataset}.pt")
     chkpt_intv = args.chkpt_intv
@@ -194,7 +200,25 @@ def train(rank=0, args=None, temp_dir=""):
         distributed=distributed,
         dry_run=args.dry_run
     )
-    evaluator = Evaluator(dataset=dataset, device=eval_device) if args.eval else None
+
+    if args.use_ddim:
+        subsequence = get_selection_schedule(
+            args.skip_schedule, size=args.subseq_size, timesteps=diffusion_configs.timesteps)
+        diffusion_eval = DDIM.from_ddpm(diffusion, eta=0., subsequence=subsequence)
+    else:
+        diffusion_eval = diffusion
+
+    if args.eval:
+        evaluator = Evaluator(
+            dataset=dataset,
+            diffusion=diffusion_eval,
+            eval_batch_size=args.eval_batch_size,
+            eval_total_size=args.eval_total_size,
+            device=eval_device
+        )
+    else:
+        evaluator = None
+
     # in the case of distributed training, resume should always be turned on
     resume = args.resume or distributed
     if resume:
@@ -240,17 +264,22 @@ def main():
     parser.add_argument("--train-device", default="cuda:0", type=str)
     parser.add_argument("--eval-device", default="cuda:0", type=str)
     parser.add_argument("--image-dir", default="./images/train", type=str)
-    parser.add_argument("--image-intv", default=1, type=int)
+    parser.add_argument("--image-intv", default=10, type=int)
     parser.add_argument("--num-save-images", default=64, type=int, help="number of images to generate & save")
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-name", default="", type=str)
-    parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
+    parser.add_argument("--chkpt-intv", default=100, type=int, help="frequency of saving a checkpoint")
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument("--resume", action="store_true", help="to resume training from a checkpoint")
     parser.add_argument("--chkpt-path", default="", type=str, help="checkpoint path used to resume training")
     parser.add_argument("--eval", action="store_true", help="whether to evaluate fid during training")
+    parser.add_argument("--eval-total-size", default=50000, type=int)
+    parser.add_argument("--eval-batch-size", default=256, type=int)
     parser.add_argument("--use-ema", action="store_true", help="whether to use exponential moving average")
+    parser.add_argument("--use-ddim", action="store_true", help="whether to use DDIM sampler for evaluation")
+    parser.add_argument("--skip-schedule", choices=["linear", "quadratic"], default="linear", type=str)
+    parser.add_argument("--subseq-size", default=50, type=int)
     parser.add_argument("--ema-decay", default=0.9999, type=float, help="decay factor of ema")
     parser.add_argument("--distributed", action="store_true", help="whether to use distributed training")
     parser.add_argument("--rigid-launch", action="store_true", help="whether to use torch multiprocessing spawn")

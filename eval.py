@@ -17,8 +17,6 @@ if __name__ == "__main__":
 
     parser.add_argument("--root", default="~/datasets", type=str)
     parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba", "celebahq"], default="cifar10")
-    parser.add_argument("--model-device", default=0, type=int)
-    parser.add_argument("--eval-device", default=0, type=int)
     parser.add_argument("--eval-batch-size", default=512, type=int)
     parser.add_argument("--eval-total-size", default=50000, type=int)
     parser.add_argument("--num-workers", default=4, type=int)

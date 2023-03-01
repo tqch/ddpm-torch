@@ -8,6 +8,9 @@ import torch
 import ddpm_torch
 
 
+__all__ = ["get_selection_schedule", "DDIM"]
+
+
 # def get_selection_schedule(schedule, size, timesteps):
 #     """
 #     :param schedule: selection schedule
@@ -36,7 +39,7 @@ def get_selection_schedule(schedule, size, timesteps):
     if schedule == "linear":
         subsequence = torch.arange(0, timesteps, timesteps // size)
     else:
-        subsequence = torch.pow(torch.linspace(0, math.sqrt(timesteps * 0.8), size), 2).round().to(torch.int32)  # noqa
+        subsequence = torch.pow(torch.linspace(0, math.sqrt(timesteps * 0.8), size), 2).round().to(torch.int64)  # noqa
 
     return subsequence
 
@@ -48,8 +51,12 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         self.subsequence = subsequence  # subsequence of the accelerated generation
 
         eta2 = eta ** 2
-        assert not (eta2 != 1. and model_var_type != "fixed-small"), \
-            'Cannot use DDIM (eta < 1) with var type other than "fixed-small"'
+        try:
+            assert not (eta2 != 1. and model_var_type != "fixed-small"), \
+                "Cannot use DDIM (eta < 1) with var type other than `fixed-small`"
+        except AssertionError:
+            # Automatically convert model_var_type to `fixed-small`
+            self.model_var_type = "fixed-small"
 
         self.alphas_bar = self.alphas_bar[subsequence]
         self.alphas_bar_prev = torch.cat([torch.ones(1, dtype=torch.float64), self.alphas_bar[:-1]], dim=0)
@@ -80,27 +87,29 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         # for fixed model_var_type's
         self.fixed_model_var, self.fixed_model_logvar = {
             "fixed-large": (
-                self.betas, torch.log(
-                    torch.cat([self.posterior_var[[1]], self.betas[1:]]).clip(min=1e-20))),
+                self.betas, torch.log(torch.cat([self.posterior_var[[1]], self.betas[1:]]).clip(min=1e-20))),
             "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
         }[self.model_var_type]
 
         self.subsequence = torch.as_tensor(subsequence)
 
     @torch.inference_mode()
-    def p_sample(self, denoise_fn, shape, device=torch.device("cpu"), noise=None):
+    def p_sample(self, denoise_fn, shape, device=torch.device("cpu"), noise=None, seed=None):
         S = len(self.subsequence)
         B, *_ = shape
         subsequence = self.subsequence.to(device)
         _denoise_fn = lambda x, t: denoise_fn(x, subsequence.gather(0, t))
         t = torch.empty((B, ), dtype=torch.int64, device=device)
+        rng = None
+        if seed is not None:
+            rng = torch.Generator(device).manual_seed(seed)
         if noise is None:
-            x_t = torch.randn(shape, device=device)
+            x_t = torch.empty(shape, device=device).normal_(generator=rng)
         else:
             x_t = noise.to(device)
         for ti in range(S - 1, -1, -1):
             t.fill_(ti)
-            x_t = self.p_sample_step(_denoise_fn, x_t, t)
+            x_t = self.p_sample_step(_denoise_fn, x_t, t, generator=rng)
         return x_t
 
     @staticmethod

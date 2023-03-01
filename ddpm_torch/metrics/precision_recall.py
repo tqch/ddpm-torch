@@ -22,9 +22,8 @@ Manifold = namedtuple("Manifold", ["features", "kth"])
 class VGGFeatureExtractor:
     WEIGHTS_URL = "https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/metrics/vgg16.pt"
 
-    def __init__(self, device=torch.device("cpu")):
+    def __init__(self):
         self.model = self._load_model()
-        self.device = device
 
     def _load_model(self):
         model_path = os.path.join(get_dir(), os.path.basename(self.WEIGHTS_URL))

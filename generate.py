@@ -131,7 +131,7 @@ def main():
     parser.add_argument("--use-ddim", action="store_true")
     parser.add_argument("--eta", default=0., type=float)
     parser.add_argument("--skip-schedule", default="linear", type=str)
-    parser.add_argument("--subseq-size", default=10, type=int)
+    parser.add_argument("--subseq-size", default=50, type=int)
     parser.add_argument("--suffix", default="", type=str)
     parser.add_argument("--max-workers", default=8, type=int)
     parser.add_argument("--num-gpus", default=1, type=int)

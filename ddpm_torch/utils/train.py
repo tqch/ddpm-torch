@@ -155,29 +155,29 @@ class Trainer:
             loss.div_(self.world_size)
         self.stats.update(x.shape[0], loss=loss.item() * x.shape[0])
 
-    def sample_fn(self, noise, diffusion=None):
+    def sample_fn(self, sample_size=None, noise=None, diffusion=None, sample_seed=None):
+        if noise is None:
+            shape = (sample_size // self.world_size, ) + self.shape
+        else:
+            shape = noise.shape
         if diffusion is None:
             diffusion = self.diffusion
-        shape = noise.shape
         with self.ema:
             sample = diffusion.p_sample(
                 denoise_fn=self.model, shape=shape,
-                device=self.device, noise=noise, seed=self.sample_seed)
+                device=self.device, noise=noise, seed=sample_seed)
+        if self.distributed:
+            # balance GPU memory usages within the same process group
+            sample_list = [torch.zeros(shape, device=self.device) for _ in range(self.world_size)]
+            dist.all_gather(sample_list, sample)
+            sample = torch.cat(sample_list, dim=0)
         assert sample.grad is None
         return sample
 
     def train(self, evaluator=None, chkpt_path=None, image_dir=None):
-
-        num_samples = self.num_save_images
-        nrow = math.floor(math.sqrt(num_samples))
-        if num_samples:
-            assert num_samples % self.world_size == 0, "Number of samples should be divisible by WORLD_SIZE!"
-            shape = (num_samples // self.world_size, ) + self.shape
-            # fix random number generator for sampling
-            rng = torch.Generator().manual_seed(self.sample_seed)
-            noise = torch.empty(shape).normal_(generator=rng)
-        else:
-            shape, noise = None, None
+        nrow = math.floor(math.sqrt(self.num_save_images))
+        if self.num_save_images:
+            assert self.num_save_images % self.world_size == 0, "Number of samples should be divisible by WORLD_SIZE!"
 
         if self.dry_run:
             self.start_epoch, self.epochs = 0, 1
@@ -199,28 +199,23 @@ class Trainer:
                     results.update(self.current_stats)
                     if self.dry_run and not global_steps % self.num_accum:
                         break
-                    if i == len(self.trainloader) - 1:
-                        self.model.eval()
-                        if evaluator is not None:
-                            eval_results = evaluator.eval(self.sample_fn)
-                        else:
-                            eval_results = dict()
-                        results.update(eval_results)
-                        t.set_postfix(results)
 
-            if not (e + 1) % self.image_intv and num_samples and image_dir:
+            if not (e + 1) % self.image_intv and self.num_save_images and image_dir:
                 self.model.eval()
-                x = self.sample_fn(noise)
-                if self.distributed:
-                    # balance GPU memory usages within the same process group
-                    x_list = [torch.zeros(shape, device=self.device) for _ in range(self.world_size)]
-                    dist.all_gather(x_list, x)
-                    x = torch.cat(x_list, dim=0)
-                x = x.cpu()
+                x = self.sample_fn(sample_size=self.num_save_images, sample_seed=self.sample_seed).cpu()
                 if self.is_leader:
-                    save_image(x.cpu(), os.path.join(image_dir, f"{e + 1}.jpg"), nrow=nrow)
-            if not (e + 1) % self.chkpt_intv and chkpt_path and self.is_leader:
-                self.save_checkpoint(chkpt_path, epoch=e+1, **results)
+                    save_image(x, os.path.join(image_dir, f"{e + 1}.jpg"), nrow=nrow)
+
+            if not (e + 1) % self.chkpt_intv and chkpt_path:
+                self.model.eval()
+                if evaluator is not None:
+                    eval_results = evaluator.eval(self.sample_fn, is_leader=self.is_leader)
+                else:
+                    eval_results = dict()
+                results.update(eval_results)
+                if self.is_leader:
+                    self.save_checkpoint(chkpt_path, epoch=e+1, **results)
+
             if self.distributed:
                 dist.barrier()  # synchronize all processes here
 
