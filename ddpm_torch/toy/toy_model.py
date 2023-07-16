@@ -1,15 +1,14 @@
 import torch
 import torch.nn as nn
 try:
-    from ..modules import Linear, Sequential
     from ..functions import get_timestep_embedding
+    from ..modules import Linear, Sequential
 except ImportError:
     import sys
     from pathlib import Path
     sys.path.append(str(Path(__file__).resolve().parents[2]))
-    from ddpm_torch.modules import Linear, Sequential
     from ddpm_torch.functions import get_timestep_embedding
-
+    from ddpm_torch.modules import Linear, Sequential
 
 DEFAULT_NORMALIZER = nn.LayerNorm
 DEFAULT_NONLINEARITY = nn.LeakyReLU(negative_slope=0.02, inplace=True)

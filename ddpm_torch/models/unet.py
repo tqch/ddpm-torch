@@ -2,14 +2,14 @@ import math
 import torch
 import torch.nn as nn
 try:
-    from ..modules import Linear, Conv2d, SamePad2d, Sequential
     from ..functions import get_timestep_embedding
+    from ..modules import Linear, Conv2d, SamePad2d, Sequential
 except ImportError:
     import sys
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from ddpm_torch.modules import Linear, Conv2d, SamePad2d, Sequential
     from ddpm_torch.functions import get_timestep_embedding
+    from ddpm_torch.modules import Linear, Conv2d, SamePad2d, Sequential
 
 
 DEFAULT_NONLINEARITY = nn.SiLU()  # f(x)=x*sigmoid(x)
@@ -17,7 +17,7 @@ DEFAULT_NONLINEARITY = nn.SiLU()  # f(x)=x*sigmoid(x)
 
 class DEFAULT_NORMALIZER(nn.GroupNorm):
     def __init__(self, num_channels, num_groups=32):
-        super().__init__(num_groups=num_groups, num_channels=num_channels)
+        super().__init__(num_groups=num_groups, num_channels=num_channels, eps=1e-6)  # PyTorch default eps is 1e-5
 
 
 class AttentionBlock(nn.Module):
@@ -47,8 +47,8 @@ class AttentionBlock(nn.Module):
         w = torch.softmax(
             w.reshape(B, H, W, H * W) / math.sqrt(C), dim=-1
         ).reshape(B, H, W, H, W)
-        out = torch.einsum("bhwHW, bcHW -> bchw", w, v)
-        return out
+        out = torch.einsum("bhwHW, bcHW -> bchw", w, v)  # this will break the contiguity -> impaired performance
+        return out.contiguous()  # force to return a contiguous tensor
 
     def forward(self, x, **kwargs):
         skip = self.skip(x)
@@ -126,7 +126,7 @@ class UNet(nn.Module):
         )
         self.in_conv = Conv2d(in_channels, hid_channels, 3, 1, 1)
         self.levels = levels
-        self.downsamples = nn.ModuleDict({f"level_{i}": self.downsample_level(i) for i in range(levels)})
+        self.downsamples = nn.ModuleDict({f"level_{i}": self._get_downsample_by_level(i) for i in range(levels)})
         mid_channels = ch_multipliers[-1] * hid_channels
         embed_dim = self.time_embedding_dim
         self.middle = Sequential(
@@ -134,14 +134,14 @@ class UNet(nn.Module):
             AttentionBlock(mid_channels),
             ResidualBlock(mid_channels, mid_channels, embed_dim=embed_dim, drop_rate=drop_rate)
         )
-        self.upsamples = nn.ModuleDict({f"level_{i}": self.upsample_level(i) for i in range(levels)})
+        self.upsamples = nn.ModuleDict({f"level_{i}": self._get_upsample_by_level(i) for i in range(levels)})
         self.out_conv = Sequential(
             self.normalize(hid_channels),
             self.nonlinearity,
             Conv2d(hid_channels, out_channels, 3, 1, 1, init_scale=0.)
         )
 
-    def get_level_block(self, level):
+    def _get_block_by_level(self, level):
         block_kwargs = {"embed_dim": self.time_embedding_dim, "drop_rate": self.drop_rate}
         if self.apply_attn[level]:
             def block(in_chans, out_chans):
@@ -153,8 +153,8 @@ class UNet(nn.Module):
                 return ResidualBlock(in_chans, out_chans, **block_kwargs)
         return block
 
-    def downsample_level(self, level):
-        block = self.get_level_block(level)
+    def _get_downsample_by_level(self, level):
+        block = self._get_block_by_level(level)
         prev_chans = (self.ch_multipliers[level-1] if level else 1) * self.hid_channels
         curr_chans = self.ch_multipliers[level] * self.hid_channels
         modules = nn.ModuleList([block(prev_chans, curr_chans)])
@@ -170,8 +170,8 @@ class UNet(nn.Module):
             modules.append(downsample)
         return modules
 
-    def upsample_level(self, level):
-        block = self.get_level_block(level)
+    def _get_upsample_by_level(self, level):
+        block = self._get_block_by_level(level)
         ch = self.hid_channels
         chs = list(map(lambda x: ch * x, self.ch_multipliers))
         next_chans = ch if level == 0 else chs[level - 1]
@@ -234,7 +234,7 @@ class UNet(nn.Module):
 
 
 if __name__ == "__main__":
-    model = UNet(3, 64, 3, (1, 2, 4), 3, (True, True, True))
+    model = UNet(3, 128, 3, (1, 2, 3), 2, (False, True, False))
     print(model)
     out = model(torch.randn(16, 3, 32, 32), t=torch.randint(1000, size=(16, )))
     print(out.shape)

@@ -1,9 +1,8 @@
 import math
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 from sklearn.datasets import make_swiss_roll
-
+from torch.utils.data import Dataset
 
 __all__ = ["Gaussian8", "Gaussian25", "SwissRoll", "DataStreamer"]
 

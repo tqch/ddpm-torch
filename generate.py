@@ -1,17 +1,17 @@
-import os
 import json
 import math
-import uuid
+import os
 import time
 import torch
-from tqdm import tqdm
-from PIL import Image
-from concurrent.futures import ThreadPoolExecutor
-from ddpm_torch import *
-from ddim import DDIM, get_selection_schedule
-from argparse import ArgumentParser
 import torch.multiprocessing as mp
+import uuid
+from PIL import Image
+from argparse import ArgumentParser
+from concurrent.futures import ThreadPoolExecutor
+from ddim import DDIM, get_selection_schedule
+from ddpm_torch import *
 from multiprocessing.sharedctypes import Synchronized
+from tqdm import tqdm
 
 
 def progress_monitor(total, counter):
@@ -26,16 +26,19 @@ def generate(rank, args, counter=0):
     assert isinstance(counter, (Synchronized, int))
 
     is_leader = rank == 0
-    dataset = args.dataset
+
+    if args.config_path is None:
+        args.config_path = os.path.join(args.config_dir, args.dataset + ".json")
+    with open(args.config_path, "r") as f:
+        meta_config = json.load(f)
+    exp_name = os.path.basename(args.config_path)[:-5]
+
+    dataset = meta_config.get("dataset", args.dataset)
     in_channels = DATASET_INFO[dataset]["channels"]
     image_res = DATASET_INFO[dataset]["resolution"][0]
     input_shape = (in_channels, image_res, image_res)
 
-    config_dir = args.config_dir
-    with open(os.path.join(config_dir, dataset + ".json")) as f:
-        configs = json.load(f)
-
-    diffusion_kwargs = configs["diffusion"]
+    diffusion_kwargs = meta_config["diffusion"]
     beta_schedule = diffusion_kwargs.pop("beta_schedule")
     beta_start = diffusion_kwargs.pop("beta_start")
     beta_end = diffusion_kwargs.pop("beta_end")
@@ -54,8 +57,8 @@ def generate(rank, args, counter=0):
         diffusion = GaussianDiffusion(betas, **diffusion_kwargs)
 
     device = torch.device(f"cuda:{rank}" if args.num_gpus > 1 else args.device)
-    block_size = configs["denoise"].pop("block_size", 1)
-    model = UNet(out_channels=in_channels, **configs["denoise"])
+    block_size = meta_config["model"].pop("block_size", 1)
+    model = UNet(out_channels=in_channels, **meta_config["model"])
     if block_size > 1:
         pre_transform = torch.nn.PixelUnshuffle(block_size)  # space-to-depth
         post_transform = torch.nn.PixelShuffle(block_size)  # depth-to-space
@@ -64,7 +67,7 @@ def generate(rank, args, counter=0):
     chkpt_dir = args.chkpt_dir
     chkpt_path = args.chkpt_path or os.path.join(chkpt_dir, f"ddpm_{dataset}.pt")
     folder_name = os.path.basename(chkpt_path)[:-3]  # truncated at file extension
-    use_ema = args.use_ema
+    use_ema = meta_config["train"].get("use_ema", args.use_ema)
     if use_ema:
         state_dict = torch.load(chkpt_path, map_location=device)["ema"]["shadow"]
     else:
@@ -80,7 +83,7 @@ def generate(rank, args, counter=0):
             p.requires_grad_(False)
 
     folder_name = folder_name + args.suffix
-    save_dir = os.path.join(args.save_dir, folder_name)
+    save_dir = os.path.join(args.save_dir, "eval", exp_name, folder_name)
     if is_leader and not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
@@ -119,13 +122,14 @@ def generate(rank, args, counter=0):
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("--dataset", choices=["mnist", "cifar10", "celeba", "celebahq"], default="cifar10")
+    parser.add_argument("--config-path", type=str, help="path to the configuration file")
+    parser.add_argument("--dataset", choices=DATASET_DICT.keys(), default="cifar10")
     parser.add_argument("--batch-size", default=128, type=int)
     parser.add_argument("--total-size", default=50000, type=int)
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-path", default="", type=str)
-    parser.add_argument("--save-dir", default="./images/eval", type=str)
+    parser.add_argument("--save-dir", default="./images", type=str)
     parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument("--use-ema", action="store_true")
     parser.add_argument("--use-ddim", action="store_true")

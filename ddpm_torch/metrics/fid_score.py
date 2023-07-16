@@ -1,8 +1,6 @@
-"""
-This script is modified from the original PyTorch Implementation of FID
+"""This script is modified from the original PyTorch Implementation of FID
 (https://github.com/mseitzer/pytorch-fid/) to support fid evaluation on
-the fly without writing data onto the disk during the training process.
-"""
+the fly without writing data onto the disk during the training process."""
 
 """Calculates the Frechet Inception Distance (FID) to evalulate GANs
 
@@ -81,7 +79,6 @@ INPUT_TRANSFORM = transforms.Compose([
 class InceptionStatistics(nn.Module):
     def __init__(
             self,
-            model=None,
             input_transform=lambda x: x,
             activation_dim=2048,
             device=torch.device("cpu")
@@ -90,12 +87,8 @@ class InceptionStatistics(nn.Module):
         self.input_transform = input_transform
         self.activation_dim = activation_dim
         self.device = device
-        if model is None:
-            self.model = self.load_model()
-        else:
-            self.model = model
-        self.model.eval()
-        self.model.to(device)
+        self.model = self.load_model()
+
         # initialize statistics
         self.running_mean = np.zeros((activation_dim, ), dtype=np.float64)
         self.running_var = np.zeros((activation_dim, activation_dim), dtype=np.float64)
@@ -104,12 +97,26 @@ class InceptionStatistics(nn.Module):
     def load_model(self):
         block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[self.activation_dim]
         model = InceptionV3([block_idx])
-        return model
+        model.eval()
+        model.requires_grad_(False)
+
+        class Extractor(nn.Module):
+            def __init__(self, module):
+                super().__init__()
+                self._module = module
+
+            def forward(self, inp):
+                return self._module(inp)[0]
+
+        if isinstance(self.device, list):
+            model.to(self.device[0])
+            return nn.DataParallel(Extractor(model), device_ids=self.device)
+        return Extractor(model).to(self.device)
 
     def forward(self, x):
         x = self.input_transform(x)
         with torch.inference_mode():
-            act = self.model(x)[0].cpu().numpy()
+            act = self.model(x).cpu().numpy()
         if act.shape[2] != 1 or act.shape[3] != 1:
             act = adaptive_avg_pool2d(act, (1, 1))
         act = act.squeeze(-1).squeeze(-1)
@@ -130,8 +137,8 @@ class InceptionStatistics(nn.Module):
     def get_statistics(self):
         assert self.count > 1, "Count must be greater than 1!"
         return (
-            self.running_mean,
-            self.running_var * self.count / (self.count - 1)
+            self.running_mean.copy(),
+            self.running_var.copy() * self.count / (self.count - 1)
         )
 
     def reset(self):
@@ -141,8 +148,8 @@ class InceptionStatistics(nn.Module):
 
 
 PRE_COMPUTED_LIST = {
-    # "cropped_celeba": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_celeba.npz",
-    "cropped_celeba": "https://github.com/tqch/VAEGAN/releases/download/precomputed_statistics_celeba/fid_stats_celeba_148x148.npz",  # noqa
+    # "celeba": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_celeba.npz",
+    "celeba": "https://github.com/tqch/VAEGAN/releases/download/precomputed_statistics_celeba/fid_stats_celeba_148x148.npz",  # noqa
     "lsun_bedroom": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_lsun_train.npz",
     "cifar10": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_cifar10_train.npz",
     "svhn": "http://bioinf.jku.at/research/ttur/ttur_stats/fid_stats_svhn_train.npz",
@@ -152,9 +159,7 @@ PRE_COMPUTED_LIST = {
 
 
 def get_precomputed(dataset, download_dir="precomputed"):
-    if dataset == "celeba":
-        dataset = "cropped_celeba"
-    url = PRE_COMPUTED_LIST[dataset]
+    url = PRE_COMPUTED_LIST.get(dataset, f"fid_stats_{dataset}.npz")
     filename = os.path.basename(url)
     if download_dir is None:
         file_obj = io.BytesIO(requests.get(url).content)
@@ -165,7 +170,8 @@ def get_precomputed(dataset, download_dir="precomputed"):
                 os.makedirs(download_dir)
             except FileExistsError:
                 pass
-            r = requests.get(url)
+            r = requests.get(url, timeout=120)
+            assert r.status_code == 200
             with open(filepath, "wb") as file:
                 file.write(r.content)
             file_obj = io.BytesIO(r.content)

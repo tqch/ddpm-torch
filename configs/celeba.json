@@ -1,19 +1,5 @@
 {
-  "train": {
-    "lr": 2e-5,
-    "batch_size": 128,
-    "grad_norm": 1.0,
-    "epochs": 600,
-    "warmup": 5000
-  },
-  "denoise": {
-    "in_channels": 3,
-    "hid_channels": 128,
-    "ch_multipliers": [1, 2, 2, 2],
-    "num_res_blocks": 2,
-    "apply_attn": [false, false, true, false],
-    "drop_rate": 0.0
-  },
+  "dataset": "celeba",
   "diffusion": {
     "timesteps": 1000,
     "beta_start": 0.0001,
@@ -22,5 +8,22 @@
     "model_mean_type": "eps",
     "model_var_type": "fixed-small",
     "loss_type": "mse"
+  },
+  "model": {
+    "in_channels": 3,
+    "hid_channels": 128,
+    "ch_multipliers": [1, 2, 2, 2],
+    "num_res_blocks": 2,
+    "apply_attn": [false, false, true, false],
+    "drop_rate": 0.0
+  },
+  "train": {
+    "lr": 2e-5,
+    "batch_size": 128,
+    "grad_norm": 1.0,
+    "epochs": 600,
+    "warmup": 5000,
+    "use_ema": true,
+    "ema_decay": 0.9999
   }
 }

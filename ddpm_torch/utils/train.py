@@ -4,7 +4,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn.parallel import DistributedDataParallel as DDP  # noqa
 from torch.utils.data.distributed import DistributedSampler
 from torchvision.utils import save_image as _save_image
 import weakref
@@ -47,7 +47,7 @@ class RunningStatistics:
     def extract(self):
         avg_stats = []
         for k, v in self.stats.items():
-            avg_stats.append((k, v/self.count))
+            avg_stats.append((k, v / self.count))
         return dict(avg_stats)
 
     def __repr__(self):
@@ -78,7 +78,7 @@ class Trainer:
             device=torch.device("cpu"),
             chkpt_intv=5,
             image_intv=1,
-            num_save_images=64,
+            num_samples=64,
             ema_decay=0.9999,
             distributed=False,
             rank=0,  # process id for distributed training
@@ -101,7 +101,7 @@ class Trainer:
         self.device = device
         self.chkpt_intv = chkpt_intv
         self.image_intv = image_intv
-        self.num_save_images = num_save_images
+        self.num_samples = num_samples
 
         if distributed:
             assert sampler is not None
@@ -110,7 +110,11 @@ class Trainer:
         self.dry_run = dry_run
         self.is_leader = rank == 0
         self.world_size = int(os.environ.get("WORLD_SIZE", "1"))
-        self.sample_seed = torch.initial_seed() + self.rank  # device-specific seed
+
+        # maintain a process-specific generator
+        self.generator = torch.Generator(device).manual_seed(8191 + self.rank)
+
+        self.sample_seed = 131071 + self.rank  # process-specific seed
 
         self.use_ema = use_ema
         if use_ema:
@@ -127,21 +131,31 @@ class Trainer:
     def timesteps(self):
         return self.diffusion.timesteps
 
+    def get_input(self, x):
+        x = x.to(self.device)
+        return {
+            "x_0": x,
+            "t": torch.empty((x.shape[0],), dtype=torch.int64, device=self.device).random_(
+                to=self.timesteps, generator=self.generator),
+            "noise": torch.empty_like(x).normal_(generator=self.generator)
+        }
+
     def loss(self, x):
-        t = torch.randint(self.timesteps, size=(x.shape[0], ), dtype=torch.int64, device=self.device)
-        loss = self.diffusion.train_losses(self.model, x_0=x, t=t)
-        assert loss.shape == (x.shape[0], )
+        loss = self.diffusion.train_losses(self.model, **self.get_input(x))
+        assert loss.shape == (x.shape[0],)
         return loss
 
     def step(self, x, global_steps=1):
-        # Note: for DDP models, the gradients collected from different devices are averaged
-        # rather than summed as per the note in the documentation:
-        # https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html
-        # Mean-reduced loss should be used to avoid inconsistent learning rate issue when number of devices changes
+        # Note: For DDP models, the gradients collected from different devices are averaged rather than summed.
+        # See https://pytorch.org/docs/1.12/generated/torch.nn.parallel.DistributedDataParallel.html
+        # Mean-reduced loss should be used to avoid inconsistent learning rate issue when number of devices changes.
         loss = self.loss(x).mean()
         loss.div(self.num_accum).backward()  # average over accumulated mini-batches
         if global_steps % self.num_accum == 0:
             # gradient clipping by global norm
+            # Note: In the official TF1.15+TPU implementation (clip_by_global_norm + CrossShardOptimizer)
+            # the gradient clipping operation is performed at shard level (i.e., TPU core or device level)
+            # see also https://github.com/tensorflow/tensorflow/blob/v1.15.0/tensorflow/python/tpu/tpu_optimizer.py#L114-L118
             nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.grad_norm)
             self.optimizer.step()
             self.optimizer.zero_grad(set_to_none=True)
@@ -157,7 +171,7 @@ class Trainer:
 
     def sample_fn(self, sample_size=None, noise=None, diffusion=None, sample_seed=None):
         if noise is None:
-            shape = (sample_size // self.world_size, ) + self.shape
+            shape = (sample_size // self.world_size,) + self.shape
         else:
             shape = noise.shape
         if diffusion is None:
@@ -167,7 +181,7 @@ class Trainer:
                 denoise_fn=self.model, shape=shape,
                 device=self.device, noise=noise, seed=sample_seed)
         if self.distributed:
-            # balance GPU memory usages within the same process group
+            # equalizes GPU memory usages across all processes within the same process group
             sample_list = [torch.zeros(shape, device=self.device) for _ in range(self.world_size)]
             dist.all_gather(sample_list, sample)
             sample = torch.cat(sample_list, dim=0)
@@ -175,9 +189,9 @@ class Trainer:
         return sample
 
     def train(self, evaluator=None, chkpt_path=None, image_dir=None):
-        nrow = math.floor(math.sqrt(self.num_save_images))
-        if self.num_save_images:
-            assert self.num_save_images % self.world_size == 0, "Number of samples should be divisible by WORLD_SIZE!"
+        nrow = math.floor(math.sqrt(self.num_samples))
+        if self.num_samples:
+            assert self.num_samples % self.world_size == 0, "Number of samples should be divisible by WORLD_SIZE!"
 
         if self.dry_run:
             self.start_epoch, self.epochs = 0, 1
@@ -189,10 +203,10 @@ class Trainer:
             results = dict()
             if isinstance(self.sampler, DistributedSampler):
                 self.sampler.set_epoch(e)
-            with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_leader) as t:
+            with tqdm(self.trainloader, desc=f"{e + 1}/{self.epochs} epochs", disable=not self.is_leader) as t:
                 for i, x in enumerate(t):
                     if isinstance(x, (list, tuple)):
-                        x = x[0]  # exclude labels; unconditional model
+                        x = x[0]  # unconditional model -> discard labels
                     global_steps += 1
                     self.step(x.to(self.device), global_steps=global_steps)
                     t.set_postfix(self.current_stats)
@@ -200,9 +214,9 @@ class Trainer:
                     if self.dry_run and not global_steps % self.num_accum:
                         break
 
-            if not (e + 1) % self.image_intv and self.num_save_images and image_dir:
+            if not (e + 1) % self.image_intv and self.num_samples and image_dir:
                 self.model.eval()
-                x = self.sample_fn(sample_size=self.num_save_images, sample_seed=self.sample_seed).cpu()
+                x = self.sample_fn(sample_size=self.num_samples, sample_seed=self.sample_seed).cpu()
                 if self.is_leader:
                     save_image(x, os.path.join(image_dir, f"{e + 1}.jpg"), nrow=nrow)
 
@@ -214,7 +228,7 @@ class Trainer:
                     eval_results = dict()
                 results.update(eval_results)
                 if self.is_leader:
-                    self.save_checkpoint(chkpt_path, epoch=e+1, **results)
+                    self.save_checkpoint(chkpt_path, epoch=e + 1, **results)
 
             if self.distributed:
                 dist.barrier()  # synchronize all processes here
@@ -280,7 +294,7 @@ class EMA:
         self.shadow = dict(shadow)
         self._refs = dict(refs)
         self.decay = decay
-        self.num_updates = 0
+        self.num_updates = -1
         self.backup = None
 
     def update(self):

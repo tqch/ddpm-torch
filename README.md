@@ -224,9 +224,8 @@ optional arguments:
 
 - Train a CelebA model with an effective batch size of 64 x 2 x 4 = 128 on a four-card machine (single node) using shared file-system initialization
     ```shell
-    python train.py --dataset celeba --use-ema --num-accum 2 --num-gpus 4 --distributed --rigid-launch
+    python train.py --dataset celeba --num-accum 2 --num-gpus 4 --distributed --rigid-launch
     ```
-    - `use-ema`: use exponential moving average (0.9999 decay by default)
     - `num-accum 2`: accumulate gradients for 2 mini-batches
     - `num-gpus`: number of GPU(s) to use for training, i.e. `WORLD_SIZE` of the process group
     - `distributed`: enable multi-gpu DDP training
@@ -237,9 +236,9 @@ optional arguments:
     export CUDA_VISIBLE_DEVICES=0,1&&torchrun --standalone --nproc_per_node 2 --rdzv_backend c10d train.py --dataset celeba --distributed
     ```
 
-- Generate 50,000 samples (128 per mini-batch) of the EMA checkpoint located at `./chkpts/train/ddpm_cifar10_2160.pt` in parallel using 4 GPUs and DDIM sampler. The results are stored in `./images/eval/cifar10_2160`
+- Generate 50,000 samples (128 per mini-batch) of the checkpoint located at `./chkpts/cifar10/cifar10_2040.pt` in parallel using 4 GPUs and DDIM sampler. The results are stored in `./images/eval/cifar10/cifar10_2040_ddim`
 	```shell
-	python generate.py --dataset cifar10 --chkpt-path ./chkpt/train/ddpm_cifar10_2160.pt --use-ema --use-ddim --skip-schedule quadratic --subseq-size 100 --suffix _2160 --num-gpus 4
+	python generate.py --dataset cifar10 --chkpt-path ./chkpts/cifar10/cifar10_2040.pt --use-ddim --skip-schedule quadratic --subseq-size 100 --suffix _ddim --num-gpus 4
 	```
     - `use-ddim`: use DDIM
     - `skip-schedule quadratic`: use the quadratic schedule
@@ -247,9 +246,9 @@ optional arguments:
     - `suffix`: suffix string to the dataset name in the folder name
     - `num-gpus`: number of GPU(s) to use for generation
 
-- Evaluate FID, Precision/Recall of generated samples in `./images/eval/cifar10_2160`
+- Evaluate FID, Precision/Recall of generated samples in `./images/eval/cifar10_2040`
 	```shell
-	python eval.py --dataset cifar10 --folder-name cifar10_2160
+	python eval.py --dataset cifar10 --sample-folder ./images/eval/cifar10/cifar10_2040
 	```
 
 ## Experiment results
@@ -322,72 +321,107 @@ optional arguments:
             <th align="center">Checkpoint</th>
         </tr><tr>
             <td align="center">CIFAR-10</td>
-            <td align="center">9.23</td>
-            <td align="center">0.692</td>
+            <td align="center">9.162</td>
+            <td align="center">0.691</td>
             <td align="center">0.473</td>
             <td align="center">46.8k</td>
-            <td align="center">0.0302</td>
+            <td align="center">0.0295</td>
 			<td align="center">-</td>
         </tr>
         <tr>
             <td align="center">|__</td>
-            <td align="center">6.02</td>
-            <td align="center">0.693</td>
-            <td align="center">0.510</td>
+            <td align="center">5.778</td>
+            <td align="center">0.697</td>
+            <td align="center">0.516</td>
             <td align="center">93.6k</td>
+            <td align="center">0.0293</td>
+            <td align="center">-</td>
+        </tr><tr>
+            <td align="center">|__</td>
+            <td align="center">4.083</td>
+            <td align="center">0.705</td>
+            <td align="center">0.539</td>
+            <td align="center">187.2k</td>
             <td align="center">0.0291</td>
             <td align="center">-</td>
         </tr><tr>
             <td align="center">|__</td>
-            <td align="center">4.04</td>
-            <td align="center">0.701</td>
-            <td align="center">0.550</td>
-            <td align="center">234.0k</td>
-            <td align="center">0.0298</td>
-            <td align="center">-</td>
-        </tr><tr>
-            <td align="center">|__</td>
-            <td align="center">3.36</td>
-            <td align="center">0.717</td>
-            <td align="center"><b>0.559</b></td>
-            <td align="center">468.0k</td>
+            <td align="center">3.31</td>
+            <td align="center">0.722</td>
+            <td align="center"><b>0.551</b></td>
+            <td align="center">421.2k</td>
             <td align="center">0.0284</td>
             <td align="center">-</td>
         </tr>
         <tr>
             <td align="center">|__</td>
-            <td align="center"><b>3.25</b></td>
-            <td align="center"><b>0.736</b></td>
-            <td align="center">0.548</td>
-            <td align="center">842.4k</td>
+            <td align="center"><b>3.188</b></td>
+            <td align="center"><b>0.739</b></td>
+            <td align="center">0.544</td>
+            <td align="center">795.6k</td>
             <td align="center"><b>0.0277</b></td>
-            <td align="center"><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_cifar10_2160.pt">[Link]</a></td>
+            <td align="center"><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/cifar10_2040.pt">[Link]</a></td>
         </tr><tr>
             <td align="center">CelebA</td>
-            <td align="center">4.81</td>
-            <td align="center"><b>0.766</b></td>
-            <td align="center">0.490</td>
+            <td align="center">4.806</td>
+            <td align="center"><b>0.772</b></td>
+            <td align="center">0.484</td>
             <td align="center">189.8k</td>
-            <td align="center">0.0153</td>
+            <td align="center">0.0155</td>
 			<td align="center">-</td>
         </tr>
         <tr>
             <td align="center">|__</td>
-            <td align="center">3.88</td>
-            <td align="center">0.760</td>
-            <td align="center">0.516</td>
+            <td align="center">3.797</td>
+            <td align="center">0.764</td>
+            <td align="center">0.511</td>
             <td align="center">379.7k</td>
-            <td align="center">0.0151</td>
+            <td align="center">0.0152</td>
 			<td align="center">-</td>
         </tr>
         <tr>
             <td align="center">|__</td>
-            <td align="center"><b>3.07</b></td>
-            <td align="center">0.754</td>
+            <td align="center"><b>2.995</b></td>
+            <td align="center">0.760</td>
             <td align="center"><b>0.540</b></td>
             <td align="center">949.2k</td>
-            <td align="center"><b>0.0147</b></td>
-			<td align="center"><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/ddpm_celeba_600.pt">[Link]</a></td>
+            <td align="center"><b>0.0148</b></td>
+			<td align="center"><a href="https://github.com/tqch/ddpm-torch/releases/download/checkpoints/celeba_600.pt">[Link]</a></td>
+        </tr><tr>
+            <td align="center">CelebA-HQ</td>
+            <td align="center">19.742</td>
+            <td align="center">0.683</td>
+            <td align="center">0.256</td>
+            <td align="center">56.2k</td>
+            <td align="center">0.0105</td>
+			<td align="center">-</td>
+        </tr>
+        <tr>
+            <td align="center">|__</td>
+            <td align="center">11.971</td>
+            <td align="center">0.705</td>
+            <td align="center">0.364</td>
+            <td align="center">224.6k</td>
+            <td align="center"><b>0.0097</b></td>
+			<td align="center">-</td>
+        </tr>
+        <tr>
+            <td align="center">|__</td>
+            <td align="center"><b>8.851</b></td>
+            <td align="center">0.768</td>
+            <td align="center"><b>0.376</b></td>
+            <td align="center">393.1k</td>
+            <td align="center">0.0098</td>
+            <td align="center">-</td>
+        </tr>
+        <tr>
+            <td align="center">|__</td>
+            <td align="center">8.91</td>
+            <td align="center"><b>0.800</b></td>
+            <td align="center">0.357</td>
+            <td align="center">561.6k</td>
+            <td align="center">0.0097</td>
+            <td align="center"><a href="https://github.com/tqch/ddpm-torch/releases/download/celeba_hq/celebahq_1200.pt">[Link]</a></td>
         </tr>
     </table>
 </p>
@@ -429,11 +463,11 @@ optional arguments:
                 <a href="./assets/cifar10_denoise.webp">
                 <img alt="cifar10_denoise" src="./assets/cifar10_denoise.webp" height="100%" width="100%">
                 </a></td>
-                <td><a href="./assets/celeba_denoise.webp">
+                <td><a href="./assets/celeba_denoise.mp4">
                 <img alt="celeba_denoise_thumbnail" src="./assets/thumbnails/celeba_denoise.webp" height="100%" width="100%">
                 </a></td>
                 <td>
-                <a href="./assets/celebahq_denoise.webp">
+                <a href="./assets/celebahq_denoise.mp4">
                 <img alt="celebahq_denoise_thumbnail" src="./assets/thumbnails/celebahq_denoise.webp" height="100%" width="100%">
                 </a></td>
 			</tr>

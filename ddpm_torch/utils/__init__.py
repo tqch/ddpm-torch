@@ -1,8 +1,8 @@
-import random
-import torch
-import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
+import random
+import torch
 
 mpl.rcParams["figure.dpi"] = 144
 
@@ -44,18 +44,18 @@ def seed_all(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def get_param(name, configs_1, configs_2):
-    def get(obj, name):
+def get_param(param, obj_1, obj_2):
+    def get(obj, attr):
         if hasattr(obj, "__getitem__"):
-            return obj[name]
+            return obj[attr]
         elif hasattr(obj, "__getattribute__"):
-            return getattr(obj, name)
+            return getattr(obj, attr)
         else:
             NotImplementedError("Not supported!")
     try:
-        param = get(configs_1, name)
+        param = get(obj_1, param)
     except (KeyError, AttributeError):
-        param = get(configs_2, name)
+        param = get(obj_2, param)
     return param
 
 

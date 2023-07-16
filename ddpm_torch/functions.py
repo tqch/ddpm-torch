@@ -1,9 +1,8 @@
 import math
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
 from typing import Union, Tuple
-
 
 DEFAULT_DTYPE = torch.float32
 

@@ -1,19 +1,5 @@
 {
-  "train": {
-    "lr": 2e-4,
-    "batch_size": 128,
-    "grad_norm": 1.0,
-    "epochs": 2160,
-    "warmup": 5000
-  },
-  "denoise": {
-    "in_channels": 3,
-    "hid_channels": 128,
-    "ch_multipliers": [1, 2, 2, 2],
-    "num_res_blocks": 2,
-    "apply_attn": [false, true, false, false],
-    "drop_rate": 0.1
-  },
+  "dataset": "cifar10",
   "diffusion": {
     "timesteps": 1000,
     "beta_start": 0.0001,
@@ -22,5 +8,22 @@
     "model_mean_type": "eps",
     "model_var_type": "fixed-large",
     "loss_type": "mse"
+  },
+  "model": {
+    "in_channels": 3,
+    "hid_channels": 128,
+    "ch_multipliers": [1, 2, 2, 2],
+    "num_res_blocks": 2,
+    "apply_attn": [false, true, false, false],
+    "drop_rate": 0.1
+  },
+  "train": {
+    "lr": 2e-4,
+    "batch_size": 128,
+    "grad_norm": 1.0,
+    "epochs": 2040,
+    "warmup": 5000,
+    "use_ema": true,
+    "ema_decay": 0.9999
   }
 }

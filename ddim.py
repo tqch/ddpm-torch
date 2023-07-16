@@ -1,11 +1,11 @@
 """
-Use the deterministic generative process proposed by Song et al. (2020) [1]
+Code for the deterministic generative process described by Song et al. (2020) [1]
 [1] Song, Jiaming, Chenlin Meng, and Stefano Ermon. "Denoising Diffusion Implicit Models." International Conference on Learning Representations. 2020.
-source file: https://github.com/ermongroup/ddim/blob/main/runners/diffusion.py, Ln 342-356
+source: https://github.com/ermongroup/ddim/blob/main/runners/diffusion.py#L342-L356
 """  # noqa
+import ddpm_torch
 import math
 import torch
-import ddpm_torch
 
 
 __all__ = ["get_selection_schedule", "DDIM"]
@@ -112,9 +112,9 @@ class DDIM(ddpm_torch.GaussianDiffusion):
             x_t = self.p_sample_step(_denoise_fn, x_t, t, generator=rng)
         return x_t
 
-    @staticmethod
-    def from_ddpm(diffusion, eta, subsequence):
-        return DDIM(**{
+    @classmethod
+    def from_ddpm(cls, eta, subsequence):
+        return cls(**{
             k: diffusion.__dict__.get(k, None)
             for k in ["betas", "model_mean_type", "model_var_type", "loss_type"]
         }, eta=eta, subsequence=subsequence)

@@ -1,15 +1,15 @@
+import numpy as np
 import os
 import torch
-import numpy as np
-from torch.optim import Adam, lr_scheduler
-from ddpm_torch.utils import seed_all, infer_range
 from ddpm_torch.toy import *
+from ddpm_torch.utils import seed_all, infer_range
+from torch.optim import Adam, lr_scheduler
 
 
 if __name__ == "__main__":
-    import argparse
+    from argparse import ArgumentParser
 
-    parser = argparse.ArgumentParser()
+    parser = ArgumentParser()
 
     parser.add_argument("--dataset", choices=["gaussian8", "gaussian25", "swissroll"], default="gaussian8")
     parser.add_argument("--size", default=100000, type=int)
@@ -29,8 +29,8 @@ if __name__ == "__main__":
     parser.add_argument("--loss-type", choices=["kl", "mse"], default="mse", type=str)
     parser.add_argument("--image-dir", default="./images/train", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
-    parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
-    parser.add_argument("--eval-intv", default=1, type=int)
+    parser.add_argument("--chkpt-intv", default=100, type=int, help="frequency of saving a checkpoint")
+    parser.add_argument("--eval-intv", default=10, type=int)
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument("--resume", action="store_true", help="to resume training from a checkpoint")
     parser.add_argument("--device", default="cuda:0", type=str)
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     true_data = iter(trainloader)
     evaluator = Evaluator(
         true_data=np.concatenate([
-            next(true_data) for _ in range(max_eval_count//eval_batch_size)
+            next(true_data) for _ in range(max_eval_count // eval_batch_size)
         ]), eval_batch_size=eval_batch_size, max_eval_count=max_eval_count, value_range=value_range)
 
     if args.resume:

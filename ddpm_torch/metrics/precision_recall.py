@@ -6,23 +6,24 @@ the implementation is based on the code of stylegan2-ada-pytorch [^2]
 [^2]: https://github.com/NVlabs/stylegan2-ada-pytorch
 """  # noqa
 
-
-import os
 import math
-import torch
 import numpy as np
-from tqdm import tqdm
+import os
+import torch
+import torch.nn as nn
+from collections import namedtuple
 from torch.hub import get_dir, download_url_to_file
 from torch.utils.data import Subset, DataLoader
-from collections import namedtuple
+from tqdm import tqdm
 
 Manifold = namedtuple("Manifold", ["features", "kth"])
 
 
-class VGGFeatureExtractor:
+class VGGFeatureExtractor(nn.Module):
     WEIGHTS_URL = "https://nvlabs-fi-cdn.nvidia.com/stylegan2-ada-pytorch/pretrained/metrics/vgg16.pt"
 
     def __init__(self):
+        super().__init__()
         self.model = self._load_model()
 
     def _load_model(self):
@@ -35,15 +36,8 @@ class VGGFeatureExtractor:
                 p.requires_grad_(False)
         return model
 
-    def extract_features(self, x):
+    def forward(self, x):
         return self.model(x, return_features=True)
-
-    def to(self, device):
-        self.model.to(device)
-        return self
-
-    def __call__(self, x):
-        return self.extract_features(x)
 
 
 def compute_distance(row_features, col_features, row_batch_size, col_batch_size, device):
@@ -129,11 +123,18 @@ class ManifoldBuilder:
                         else:
                             yield to_uint8(model.sample_x(extr_batch_size))
 
-            self.extractor = VGGFeatureExtractor().to(device)
+            self.op_device = input_device = device
+            if isinstance(device, list):
+                self.extractor = nn.DataParallel(VGGFeatureExtractor().to(device[0]), device_ids=device)
+                self.op_device = device[0]
+                input_device = "cpu"
+            else:
+                self.extractor = VGGFeatureExtractor().to(device)
+
             features = []
             with torch.inference_mode():
                 for x in tqdm(dataloader(), desc="Extracting features", total=num_extr_batches):
-                    features.append(self.extractor(x.to(device)).cpu())
+                    features.append(self.extractor(x.to(input_device)).cpu())
             features = torch.cat(features, dim=0)
         else:
             assert isinstance(features, torch.Tensor) and features.grad_fn is None
@@ -150,7 +151,7 @@ class ManifoldBuilder:
     def compute_distance(self, row_features, col_features):
         return compute_distance(
             row_features, col_features,
-            row_batch_size=self.row_batch_size, col_batch_size=self.col_batch_size, device=self.device)
+            row_batch_size=self.row_batch_size, col_batch_size=self.col_batch_size, device=self.op_device)
 
     def compute_kth(self, row_features: torch.Tensor, col_features: torch.Tensor = None):
         if col_features is None:

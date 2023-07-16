@@ -1,8 +1,8 @@
-import os
 import math
+import numpy as np
+import os
 import torch
 import torch.nn as nn
-import numpy as np
 from tqdm import tqdm
 from ..functions import discrete_klv2d, hist2d
 from ..utils import save_scatterplot
