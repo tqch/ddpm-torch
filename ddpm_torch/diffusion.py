@@ -86,7 +86,7 @@ class GaussianDiffusion:
     def q_mean_var(self, x_0, t):
         mean = self._extract(self.sqrt_alphas_bar, t, x_0) * x_0
         var = self._extract(1. - self.alphas_bar, t, x_0)
-        logvar = self._extract(self.sqrt_one_minus_alphas_bar, t, x_0)
+        logvar = self._extract(torch.log(1 - self.alphas_bar), t, x_0)
         return mean, var, logvar
 
     def q_sample(self, x_0, t, noise=None):
