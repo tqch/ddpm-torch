@@ -113,7 +113,7 @@ class DDIM(ddpm_torch.GaussianDiffusion):
         return x_t
 
     @classmethod
-    def from_ddpm(cls, eta, subsequence):
+    def from_ddpm(cls, diffusion, eta, subsequence):
         return cls(**{
             k: diffusion.__dict__.get(k, None)
             for k in ["betas", "model_mean_type", "model_var_type", "loss_type"]
