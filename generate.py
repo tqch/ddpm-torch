@@ -68,15 +68,30 @@ def generate(rank, args, counter=0):
     chkpt_path = args.chkpt_path or os.path.join(chkpt_dir, f"ddpm_{dataset}.pt")
     folder_name = os.path.basename(chkpt_path)[:-3]  # truncated at file extension
     use_ema = meta_config["train"].get("use_ema", args.use_ema)
-    if use_ema:
-        state_dict = torch.load(chkpt_path, map_location=device)["ema"]["shadow"]
-    else:
-        state_dict = torch.load(chkpt_path, map_location=device)["model"]
+
+    state_dict = torch.load(chkpt_path, map_location=device)
+    try:
+        if use_ema:
+            state_dict = state_dict["ema"]["shadow"]
+        else:
+            state_dict = state_dict["model"]
+        print("Loading checkpoint...", end=" ")
+    except KeyError:
+        print("Not a valid checkpoint!")
+        print("Try loading checkpoint directly as model weights...", end=" ")
+
     for k in list(state_dict.keys()):
         if k.startswith("module."):  # state_dict of DDP
             state_dict[k.split(".", maxsplit=1)[1]] = state_dict.pop(k)
-    model.load_state_dict(state_dict)
-    del state_dict
+
+    try:
+        model.load_state_dict(state_dict)
+        del state_dict
+        print("succeeded!")
+    except RuntimeError:
+        print("failed!")
+        exit(1)
+
     model.eval()
     for p in model.parameters():
         if p.requires_grad:
