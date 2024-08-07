@@ -252,16 +252,16 @@ class GaussianDiffusion:
     def calc_all_bpd(self, denoise_fn, x_0, clip_denoised=True):
         B, T = x_0.shape, self.timesteps
         t = torch.empty([B, ], dtype=torch.int64)
-        t.fill_(T - 1)
         losses = torch.zeros([B, T], dtype=torch.float32)
         mses = torch.zeros([B, T], dtype=torch.float32)
 
-        for i in range(T - 1, -1, -1):
+        for ti in range(T - 1, -1, -1):
+            t.fill_(ti)
             x_t = self.q_sample(x_0, t=t)
             loss, pred_x_0 = self._loss_term_bpd(
                 denoise_fn, x_0, x_t=x_t, t=t, clip_denoised=clip_denoised, return_pred=True)
-            losses[:, i] = loss
-            mses[:, i] = flat_mean((pred_x_0 - x_0).pow(2))
+            losses[:, ti] = loss
+            mses[:, ti] = flat_mean((pred_x_0 - x_0).pow(2))
 
         prior_bpd = self._prior_bpd(x_0)
         total_bpd = torch.sum(losses, dim=1) + prior_bpd
