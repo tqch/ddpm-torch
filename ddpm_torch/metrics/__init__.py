@@ -40,7 +40,7 @@ class Evaluator:
         with trange(num_batches, desc="Evaluating FID", disable=not is_leader) as t:
             for i in t:
                 if i == len(t) - 1:
-                    batch_size = self.eval_total_size % self.eval_batch_size
+                    batch_size = (self.eval_total_size % self.eval_batch_size) or self.eval_batch_size
                 else:
                     batch_size = self.eval_batch_size
                 x = sample_fn(sample_size=batch_size, diffusion=self.diffusion)
